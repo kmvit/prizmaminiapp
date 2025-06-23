@@ -28,16 +28,17 @@ def start_server():
         asyncio.run(initialize_database())
         
         logger.info("🚀 Запуск FastAPI сервера PRIZMA...")
-        logger.info("📱 API документация: http://localhost:8080/docs")
-        logger.info("📖 ReDoc документация: http://localhost:8080/redoc")
-        logger.info("🌐 Фронтенд: http://localhost:8080/")
-        logger.info("❓ Проверка работы: http://localhost:8080/api/health")
+        logger.info("📱 API документация: http://0.0.0.0:8080/docs")
+        logger.info("📖 ReDoc документация: http://0.0.0.0:8080/redoc")
+        logger.info("🌐 Фронтенд: http://0.0.0.0:8080/")
+        logger.info("❓ Проверка работы: http://0.0.0.0:8080/api/health")
+        logger.info("ℹ️  Сервер доступен локально: http://localhost:8080/")
         logger.info("⏹️  Для остановки нажмите Ctrl+C")
         
         # Запускаем uvicorn
         uvicorn.run(
             "bot.web_app:app",
-            host="localhost",
+            host="0.0.0.0",
             port=8080,
             reload=True,  # Автоперезагрузка при изменении кода
             log_level="info"
