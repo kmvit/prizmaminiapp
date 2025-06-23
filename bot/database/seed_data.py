@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """
 Простой скрипт для загрузки вопросов в базу данных PRIZMA
-Запуск: python -m bot.database.seed_data
+Запуск: python bot/database/seed_data.py
 """
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from sqlalchemy import delete
+
+# Добавляем корневую директорию проекта в Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from bot.database.database import init_db, async_session
 from bot.database.models import Question, QuestionType
 
