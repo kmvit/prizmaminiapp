@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="format-detection" content="telephone=no">
+    <title>PRIZMA</title>
+    <link rel="stylesheet" href="css/main.css">
+    <script src="js/config.js"></script>
+    <script src="js/telegram-vanilla.js"></script>
+    <style>
+        .download-file.loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .download-file.loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid #fff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bodyDownload">
+
+<main class="main download">
+    <div class="download-top">
+        <div class="download-header">
+            <img src="./images/logo.svg" alt="">
+            <h1 class="download-title linear-text">Ваш персональный анализ готов!</h1>
+        </div>
+        <a id="downloadReport" href="#" class="download-file">
+            <img src="./images/file.png" alt="">
+            <p class="download-file-text"><span>Нажмите, чтобы скачать</span> персональный анализ PRIZMA</p>
+        </a>
+    </div>
+    <a class="button-triangle button-download" href="price.html">
+        <span >Изучите, что вы получите <br> в полном анализе</span>
+        <img src="./images/button-triangle.svg" alt="">
+    </a>
+</main>
+
+
+
+<script src="js/jquery.min.js"></script>
+<script src="./js/jquery-ui.min.js"></script>
+<script src="js/main-telegram.js"></script>
+<script>
+// API configuration
+const API_BASE_URL = window.location.origin;
+
+// Получаем Telegram ID пользователя
+function getTelegramUserId() {
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+        return window.Telegram.WebApp.initDataUnsafe.user.id;
+    }
+    // Для тестирования - используем фиксированный ID
+    const testId = localStorage.getItem('test_telegram_id');
+    if (testId) {
+        return parseInt(testId);
+    }
+    return 123456789;
+}
+
+// Скачивание персонального отчета
+async function downloadPersonalReport() {
+    const telegramId = getTelegramUserId();
+    
+    if (!telegramId) {
+        alert('Ошибка: не удалось получить ID пользователя');
+        return;
+    }
+    
+    try {
+        // Показываем индикатор загрузки
+        $('#downloadReport').addClass('loading');
+        $('#downloadReport .download-file-text span').text('Генерируем отчет...');
+        
+        // Скачиваем отчет через API
+        const response = await fetch(`${API_BASE_URL}/api/download/report/${telegramId}`);
+        
+        if (response.ok) {
+            // Создаем blob из ответа
+            const blob = await response.blob();
+            
+            // Создаем ссылку для скачивания
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `prizma-report-${telegramId}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Восстанавливаем кнопку
+            $('#downloadReport .download-file-text span').text('Отчет скачан!');
+            setTimeout(() => {
+                $('#downloadReport .download-file-text span').text('Нажмите, чтобы скачать');
+            }, 2000);
+            
+        } else {
+            const errorData = await response.json();
+            alert('Ошибка при скачивании: ' + (errorData.detail || 'Неизвестная ошибка'));
+        }
+        
+    } catch (error) {
+        console.error('Error downloading report:', error);
+        alert('Ошибка при скачивании отчета');
+    } finally {
+        $('#downloadReport').removeClass('loading');
+    }
+}
+
+// Привязываем обработчик к кнопке скачивания
+$(document).ready(function() {
+    $('#downloadReport').on('click', function(e) {
+        e.preventDefault();
+        downloadPersonalReport();
+    });
+    
+    // Для тестирования - сохраняем тестовый ID
+    if (!localStorage.getItem('test_telegram_id')) {
+        localStorage.setItem('test_telegram_id', '123456789');
+    }
+});
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+

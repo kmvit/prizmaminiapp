@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="format-detection" content="telephone=no">
+    <title>PRIZMA</title>
+    <link rel="stylesheet" href="css/main.css">
+    <script src="js/config.js"></script>
+    <script src="js/telegram-vanilla.js"></script>
+</head>
+<body class="bodyQuestion">
+
+<main class="main question">
+    <div class="question-header">
+        <div class="question-prev-button-container">
+            <a href="login.html" class="steps-header-button">
+                <img src="./images/arrow-prev-icon.svg" alt="">
+            </a>
+            <h1 class="question-num linear-text">Вопрос <span class="current-question">1</span> из <span class="question-count">5</span></h1>
+        </div>
+        <p class="question-title" id="questionText">Загружаем вопрос...</p>
+    </div>
+    <div class="question-area-container">
+        <div class="write-icon">
+            <span>...</span>
+            <img src="./images/pencil-icon.svg" alt="">
+        </div>
+        <textarea name="" id="questionArea" class="question-area" placeholder="Введите ваш ответ..."></textarea>
+        <button class="micro-button">
+            <img src="./images/micro-icon.svg" alt="">
+        </button>
+    </div>
+    <button class="button-triangle" id="nextButton" onclick="submitAnswer()">
+        <span>Следующий вопрос</span>
+        <img src="./images/button-triangle.svg" alt="">
+    </button>
+    
+    <!-- Индикатор загрузки -->
+    <div id="loadingIndicator" style="display: none; text-align: center; margin: 20px;">
+        <p>⏳ Обрабатываем ваш ответ...</p>
+    </div>
+</main>
+
+<script src="js/jquery.min.js"></script>
+<script src="./js/jquery-ui.min.js"></script>
+<script src="js/main-telegram.js"></script>
+<script>
+// API configuration
+const API_BASE_URL = window.location.origin;
+let currentTelegramId = null;
+let currentQuestionData = null;
+
+// Получаем Telegram ID пользователя
+function getTelegramUserId() {
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+        return window.Telegram.WebApp.initDataUnsafe.user.id;
+    }
+    // Для тестирования - используем фиксированный ID
+    const testId = localStorage.getItem('test_telegram_id');
+    if (testId) {
+        return parseInt(testId);
+    }
+    return 123456789;
+}
+
+// Загрузка текущего вопроса
+async function loadCurrentQuestion() {
+    try {
+        currentTelegramId = getTelegramUserId();
+        console.log('Loading question for user:', currentTelegramId);
+        console.log('API_BASE_URL:', API_BASE_URL);
+        
+        if (!currentTelegramId) {
+            throw new Error('Не удалось получить Telegram ID пользователя');
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/api/user/${currentTelegramId}/current-question`);
+        console.log('Response status:', response.status);
+        
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (response.ok) {
+            currentQuestionData = data;
+            displayQuestion(data);
+        } else {
+            console.error('Error loading question:', data.error);
+            $('#questionText').text('Ошибка загрузки вопроса: ' + (data.error || data.detail || 'неизвестная ошибка'));
+        }
+    } catch (error) {
+        console.error('Error loading question:', error);
+        $('#questionText').text('Ошибка загрузки вопроса: ' + error.message);
+    }
+}
+
+// Отображение вопроса
+function displayQuestion(data) {
+    const { question, progress, user } = data;
+    
+    // Обновляем текст вопроса
+    $('#questionText').text(question.text);
+    
+    // Обновляем счетчик вопросов
+    $('.current-question').text(progress.current);
+    $('.question-count').text(progress.total);
+    
+    // Настраиваем textarea
+    const textarea = $('#questionArea');
+    textarea.val('');
+    textarea.attr('maxlength', question.max_length || 1000);
+    
+    // Показываем информацию о типе аккаунта
+    if (!user.is_paid && question.type === 'paid') {
+        $('#questionText').append('<br><small style="color: #ff6b6b;">💎 Этот вопрос доступен в премиум-версии</small>');
+    }
+    
+    console.log('Question loaded:', question);
+}
+
+// Отправка ответа
+async function submitAnswer() {
+    const answerText = $('#questionArea').val().trim();
+    
+    if (!answerText) {
+        alert('Пожалуйста, введите ответ на вопрос');
+        return;
+    }
+    
+    if (!currentTelegramId) {
+        alert('Ошибка: не удалось получить ID пользователя');
+        console.error('currentTelegramId is null/undefined');
+        return;
+    }
+    
+    // Показываем индикатор загрузки
+    $('#loadingIndicator').show();
+    $('#nextButton').prop('disabled', true);
+    
+    console.log('Отправляем ответ:', {
+        telegramId: currentTelegramId,
+        answer: answerText,
+        questionId: currentQuestionData?.question?.id
+    });
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/user/${currentTelegramId}/answer`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                text_answer: answerText,
+                answer_type: 'text'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            if (data.status === 'next_question') {
+                // Переходим к следующему вопросу
+                currentQuestionData = {
+                    question: data.next_question,
+                    progress: data.progress,
+                    user: currentQuestionData.user
+                };
+                displayQuestion(currentQuestionData);
+                
+                // Очищаем textarea
+                $('#questionArea').val('');
+                
+                // Показываем успешное сохранение
+                showSuccessMessage('Ответ сохранен!');
+                
+            } else if (data.status === 'test_completed') {
+                // Тест завершен
+                alert(data.message);
+                window.location.href = 'download.html';
+            }
+        } else {
+            console.error('Error saving answer:', data.error);
+            alert('Ошибка при сохранении ответа: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error saving answer:', error);
+        alert('Ошибка при сохранении ответа');
+    } finally {
+        // Скрываем индикатор загрузки
+        $('#loadingIndicator').hide();
+        $('#nextButton').prop('disabled', false);
+    }
+}
+
+// Показать сообщение об успехе
+function showSuccessMessage(message) {
+    const successDiv = $('<div>')
+        .text(message)
+        .css({
+            position: 'fixed',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#4CAF50',
+            color: 'white',
+            padding: '10px 20px',
+            borderRadius: '5px',
+            zIndex: 1000
+        });
+    
+    $('body').append(successDiv);
+    
+    setTimeout(() => {
+        successDiv.fadeOut(() => successDiv.remove());
+    }, 2000);
+}
+
+// Обработка Enter в textarea
+$('#questionArea').on('keydown', function(e) {
+    if (e.ctrlKey && e.keyCode === 13) { // Ctrl+Enter
+        submitAnswer();
+    }
+});
+
+// Загружаем вопрос при загрузке страницы
+$(document).ready(function() {
+    loadCurrentQuestion();
+    
+    // Для тестирования - сохраняем тестовый ID
+    if (!localStorage.getItem('test_telegram_id')) {
+        localStorage.setItem('test_telegram_id', '123456789');
+    }
+});
+</script>
+</body>
+</html>
