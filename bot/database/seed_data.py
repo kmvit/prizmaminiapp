@@ -1,117 +1,81 @@
-import asyncio
-from bot.database.database import init_db
-from bot.database.models import Question, QuestionType
-from bot.services.database_service import db_service
+#!/usr/bin/env python3
+"""
+Простой скрипт для загрузки вопросов в базу данных PRIZMA
+Запуск: python -m bot.database.seed_data
+"""
 
-async def seed_questions():
-    """Заполнить базу данных начальными вопросами"""
+import asyncio
+import json
+from pathlib import Path
+from sqlalchemy import delete
+from bot.database.database import init_db, async_session
+from bot.database.models import Question, QuestionType
+
+async def load_questions():
+    """Загрузить все вопросы из JSON в базу данных"""
     
-    questions_data = [
-        # Бесплатные вопросы
-        {
-            "text": "Расскажите о себе. Как бы вы описали свою личность?",
-            "type": QuestionType.FREE,
-            "order_number": 1
-        },
-        {
-            "text": "Как вы обычно реагируете на стрессовые ситуации? Приведите пример.",
-            "type": QuestionType.FREE,
-            "order_number": 2
-        },
-        {
-            "text": "Опишите ваш идеальный день от утра до вечера.",
-            "type": QuestionType.FREE,
-            "order_number": 3
-        },
-        {
-            "text": "Что вас больше всего мотивирует в жизни? Какие цели вы ставите перед собой?",
-            "type": QuestionType.FREE,
-            "order_number": 4
-        },
-        {
-            "text": "Как вы принимаете важные решения? Полагаетесь на логику или интуицию?",
-            "type": QuestionType.FREE,
-            "order_number": 5
-        },
-        
-        # Платные вопросы (более глубокие)
-        {
-            "text": "Расскажите о самом сложном периоде в вашей жизни. Как вы его преодолели?",
-            "type": QuestionType.PAID,
-            "order_number": 6
-        },
-        {
-            "text": "Что вас больше всего пугает в отношениях с людьми? Как это влияет на вашу жизнь?",
-            "type": QuestionType.PAID,
-            "order_number": 7
-        },
-        {
-            "text": "Опишите ваши детские воспоминания. Какие события сформировали вас как личность?",
-            "type": QuestionType.PAID,
-            "order_number": 8
-        },
-        {
-            "text": "Как вы справляетесь с критикой? Расскажите о случае, когда критика сильно на вас повлияла.",
-            "type": QuestionType.PAID,
-            "order_number": 9
-        },
-        {
-            "text": "Что вы чувствуете, когда остаетесь наедине с собой? О чем думаете в моменты одиночества?",
-            "type": QuestionType.PAID,
-            "order_number": 10
-        },
-        {
-            "text": "Опишите ваши самые глубокие страхи и как они влияют на ваши жизненные выборы.",
-            "type": QuestionType.PAID,
-            "order_number": 11
-        },
-        {
-            "text": "Как вы определяете успех? Что для вас значит быть счастливым?",
-            "type": QuestionType.PAID,
-            "order_number": 12
-        },
-        {
-            "text": "Расскажите о ваших отношениях с родителями. Как это повлияло на ваш характер?",
-            "type": QuestionType.PAID,
-            "order_number": 13
-        },
-        {
-            "text": "Что вы больше всего цените в других людях? А что вас раздражает?",
-            "type": QuestionType.PAID,
-            "order_number": 14
-        },
-        {
-            "text": "Как вы видите себя через 10 лет? Какой человек, каких достижений, какой образ жизни?",
-            "type": QuestionType.PAID,
-            "order_number": 15
-        }
-    ]
+    # Путь к JSON файлу
+    json_path = Path(__file__).parent.parent.parent / "data" / "questions.json"
     
-    print("🌱 Начинаю заполнение базы данных вопросами...")
+    print("🔬 PRIZMA - Загрузка вопросов в базу данных")
+    print("=" * 50)
     
-    for question_data in questions_data:
+    # Читаем JSON
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        questions_data = data["questions"]
+        print(f"📋 Найдено {len(questions_data)} вопросов в JSON файле")
+    except Exception as e:
+        print(f"❌ Ошибка чтения JSON: {e}")
+        return
+    
+    async with async_session() as session:
         try:
-            await db_service.create_question(
-                text=question_data["text"],
-                question_type=question_data["type"],
-                order_number=question_data["order_number"]
-            )
-            print(f"✅ Добавлен вопрос {question_data['order_number']}: {question_data['text'][:50]}...")
+            # Очищаем старые вопросы
+            await session.execute(delete(Question))
+            print("🗑️ Очищены старые вопросы")
+            
+            # Добавляем новые вопросы
+            free_count = 0
+            paid_count = 0
+            
+            for q_data in questions_data:
+                question_type = QuestionType.FREE if q_data["type"] == "FREE" else QuestionType.PAID
+                
+                question = Question(
+                    text=q_data["text"],
+                    type=question_type,
+                    order_number=q_data["order_number"],
+                    allow_voice=q_data.get("allow_voice", True),
+                    max_length=q_data.get("max_length", 1000)
+                )
+                session.add(question)
+                
+                if question_type == QuestionType.FREE:
+                    free_count += 1
+                else:
+                    paid_count += 1
+            
+            await session.commit()
+            
+            print("✅ Вопросы успешно загружены!")
+            print(f"🆓 Бесплатных: {free_count}")
+            print(f"💎 Платных: {paid_count}")
+            print(f"📝 Всего: {len(questions_data)}")
+            
         except Exception as e:
-            print(f"❌ Ошибка при добавлении вопроса {question_data['order_number']}: {e}")
-    
-    print("🎉 Заполнение базы данных завершено!")
+            print(f"❌ Ошибка загрузки: {e}")
+            await session.rollback()
 
 async def main():
-    """Инициализация базы данных и заполнение начальными данными"""
+    """Инициализация БД и загрузка данных"""
     print("🚀 Инициализация базы данных...")
-    
-    # Создаем таблицы
     await init_db()
-    print("📝 Таблицы созданы")
+    print("📊 Таблицы созданы")
     
-    # Заполняем начальными данными
-    await seed_questions()
+    await load_questions()
+    print("🎉 Готово! Можно запускать приложение")
 
 if __name__ == "__main__":
     asyncio.run(main()) 

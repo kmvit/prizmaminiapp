@@ -375,11 +375,177 @@ $(function() {
             }
         });
 
-        // Обработка микрофона (если есть)
+        // Обработка микрофона - транскрибация речи в текст
         $('.micro-button').click(function() {
             window.TelegramWebApp.hapticFeedback('heavy');
-            // Здесь будет логика записи голоса
+            startVoiceTranscription();
         });
+        
+        function startVoiceTranscription() {
+            // Сначала пробуем использовать нативные возможности Telegram
+            if (window.TelegramWebApp && window.TelegramWebApp.platform !== 'unknown') {
+                // В Telegram всегда доступна клавиатура с микрофоном
+                window.TelegramWebApp.showAlert('Используйте кнопку микрофона на клавиатуре Telegram для голосового ввода');
+                
+                // Фокусируемся на поле ввода, чтобы появилась клавиатура с микрофоном
+                $('#questionArea').focus();
+                
+                // Добавляем подсказку в интерфейс
+                showVoiceInputHint();
+                return;
+            }
+            
+            // Fallback: проверяем поддержку речевого ввода в браузере
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                window.TelegramWebApp.showAlert('Речевой ввод не поддерживается в данном браузере');
+                return;
+            }
+            
+            // Используем Web Speech API для транскрибации
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            
+            // Настройки распознавания
+            recognition.lang = 'ru-RU';
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
+            
+            // Визуальная обратная связь
+            $('.micro-button').addClass('recording');
+            $('.micro-button img').attr('src', './images/pause-icon.svg');
+            showTranscriptionIndicator();
+            
+            recognition.onstart = function() {
+                console.log('Распознавание речи начато');
+            };
+            
+            recognition.onresult = function(event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                // Обновляем поле ввода
+                const currentText = $('#questionArea').val();
+                const newText = currentText + ' ' + finalTranscript;
+                $('#questionArea').val(newText.trim());
+                
+                // Показываем промежуточный результат
+                if (interimTranscript) {
+                    updateTranscriptionIndicator('🎤 Слышу: ' + interimTranscript);
+                }
+            };
+            
+            recognition.onerror = function(event) {
+                console.error('Ошибка распознавания речи:', event.error);
+                stopTranscription();
+                
+                let errorMessage = 'Ошибка распознавания речи';
+                switch(event.error) {
+                    case 'network':
+                        errorMessage = 'Ошибка сети. Проверьте подключение к интернету';
+                        break;
+                    case 'not-allowed':
+                        errorMessage = 'Доступ к микрофону запрещен. Разрешите доступ в настройках браузера';
+                        break;
+                    case 'no-speech':
+                        errorMessage = 'Речь не обнаружена. Попробуйте еще раз';
+                        break;
+                }
+                
+                window.TelegramWebApp.showAlert(errorMessage);
+            };
+            
+            recognition.onend = function() {
+                console.log('Распознавание речи завершено');
+                stopTranscription();
+            };
+            
+            // Запускаем распознавание
+            try {
+                recognition.start();
+            } catch (error) {
+                console.error('Ошибка запуска распознавания:', error);
+                stopTranscription();
+                window.TelegramWebApp.showAlert('Не удалось запустить распознавание речи');
+            }
+        }
+        
+        function stopTranscription() {
+            // Восстанавливаем визуал
+            $('.micro-button').removeClass('recording');
+            $('.micro-button img').attr('src', './images/micro-icon.svg');
+            hideTranscriptionIndicator();
+        }
+        
+        function showTranscriptionIndicator() {
+            const indicator = $('<div class="transcription-indicator">🎤 Говорите...</div>');
+            indicator.css({
+                position: 'fixed',
+                top: '20px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: '#4CAF50',
+                color: 'white',
+                padding: '8px 16px',
+                borderRadius: '20px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                zIndex: 1000,
+                animation: 'pulse 1s infinite'
+            });
+            
+            $('body').append(indicator);
+        }
+        
+        function updateTranscriptionIndicator(text) {
+            $('.transcription-indicator').text(text);
+        }
+        
+        function hideTranscriptionIndicator() {
+            $('.transcription-indicator').remove();
+        }
+        
+        function showVoiceInputHint() {
+            const hint = $('<div class="voice-hint">🎤 Нажмите на микрофон на клавиатуре Telegram<br>📝 Ваша речь будет преобразована в текст</div>');
+            hint.css({
+                position: 'fixed',
+                bottom: '120px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                padding: '12px 20px',
+                borderRadius: '25px',
+                fontSize: '14px',
+                fontWeight: '500',
+                zIndex: 1000,
+                maxWidth: '320px',
+                textAlign: 'center',
+                lineHeight: '1.4',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+                border: '2px solid rgba(255,255,255,0.2)'
+            });
+            
+            $('body').append(hint);
+            
+            // Убираем подсказку через 6 секунд
+            setTimeout(() => {
+                hint.fadeOut(1000, () => hint.remove());
+            }, 6000);
+            
+            // Анимация появления
+            hint.css('opacity', '0').animate({ opacity: 1 }, 500);
+        }
     }
 
     function initLoadingPage() {
