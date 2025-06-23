@@ -329,57 +329,175 @@ $(function() {
         window.TelegramWebApp.showBackButton();
         
         const textarea = $('#questionArea');
-        let currentQuestion = 1;
-        const totalQuestions = 10; // Настроить по необходимости
+        let currentTelegramId = null;
+        let currentQuestionData = null;
 
-        // Обновление номера вопроса
-        $('.question-num span').text(`${currentQuestion}/${totalQuestions}`);
+        // Получаем Telegram ID пользователя
+        function getTelegramUserId() {
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+                return window.Telegram.WebApp.initDataUnsafe.user.id;
+            }
+            // Для тестирования - используем фиксированный ID
+            const testId = localStorage.getItem('test_telegram_id');
+            if (testId) {
+                return parseInt(testId);
+            }
+            return 123456789;
+        }
 
-        // Показать главную кнопку для отправки ответа
-        window.TelegramWebApp.showMainButton('Следующий вопрос', function() {
-            const answer = textarea.val().trim();
+        // Загрузка текущего вопроса с сервера
+        async function loadCurrentQuestion() {
+            try {
+                currentTelegramId = getTelegramUserId();
+                console.log('Loading question for user:', currentTelegramId);
+                
+                if (!currentTelegramId) {
+                    throw new Error('Не удалось получить Telegram ID пользователя');
+                }
+                
+                const response = await fetch(`/api/user/${currentTelegramId}/current-question`);
+                console.log('Response status:', response.status);
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (response.ok) {
+                    currentQuestionData = data;
+                    displayQuestion(data);
+                } else {
+                    console.error('Error loading question:', data.error);
+                    window.TelegramWebApp.showAlert('Ошибка загрузки вопроса: ' + (data.error || data.detail || 'неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Error loading question:', error);
+                window.TelegramWebApp.showAlert('Ошибка загрузки вопроса: ' + error.message);
+            }
+        }
+
+        // Отображение вопроса
+        function displayQuestion(data) {
+            const { question, progress, user } = data;
             
-            if (!answer) {
-                window.TelegramWebApp.showAlert('Пожалуйста, ответьте на вопрос');
+            // Обновляем текст вопроса
+            $('#questionText').text(question.text);
+            
+            // Обновляем счетчик вопросов
+            $('.current-question').text(progress.current);
+            $('.question-count').text(progress.total);
+            
+            // Настраиваем textarea
+            textarea.val('');
+            textarea.attr('maxlength', question.max_length || 1000);
+            
+            // Показываем информацию о типе аккаунта
+            if (!user.is_paid && question.type === 'paid') {
+                $('#questionText').append('<br><small style="color: #ff6b6b;">💎 Этот вопрос доступен в премиум-версии</small>');
+            }
+            
+            console.log('Question loaded:', question);
+        }
+
+        // Отправка ответа на сервер
+        async function submitAnswer() {
+            const answerText = textarea.val().trim();
+            
+            if (!answerText) {
+                window.TelegramWebApp.showAlert('Пожалуйста, введите ответ на вопрос');
                 return;
             }
-
-            // Сохранить ответ
-            let answers = JSON.parse(localStorage.getItem('userAnswers') || '[]');
-            answers.push({
-                question: currentQuestion,
-                answer: answer,
-                timestamp: new Date().toISOString()
-            });
-            localStorage.setItem('userAnswers', JSON.stringify(answers));
-
-            // Переход к следующему вопросу или завершение
-            if (currentQuestion < totalQuestions) {
-                currentQuestion++;
-                $('.question-num span').text(`${currentQuestion}/${totalQuestions}`);
-                textarea.val('');
-                window.TelegramWebApp.hideMainButton();
-            } else {
-                // Завершение опроса
-                window.location.href = 'loading.html';
+            
+            if (!currentTelegramId) {
+                window.TelegramWebApp.showAlert('Ошибка: не удалось получить ID пользователя');
+                console.error('currentTelegramId is null/undefined');
+                return;
             }
-        });
+            
+            // Показываем загрузку
+            window.TelegramWebApp.hideMainButton();
+            
+            console.log('Отправляем ответ:', {
+                telegramId: currentTelegramId,
+                answer: answerText,
+                questionId: currentQuestionData?.question?.id
+            });
+            
+            try {
+                const response = await fetch(`/api/user/${currentTelegramId}/answer`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text_answer: answerText,
+                        answer_type: 'text'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Тактильная обратная связь
+                    window.TelegramWebApp.hapticFeedback('success');
+                    
+                    if (data.status === 'next_question') {
+                        // Переходим к следующему вопросу
+                        currentQuestionData = {
+                            question: data.next_question,
+                            progress: data.progress,
+                            user: currentQuestionData.user
+                        };
+                        displayQuestion(currentQuestionData);
+                        
+                        // Очищаем textarea
+                        textarea.val('');
+                        
+                    } else if (data.status === 'test_completed') {
+                        // Тест завершен
+                        window.TelegramWebApp.showAlert(data.message);
+                        
+                        // Для бесплатных пользователей переходим на загрузку, затем на скачивание
+                        if (!currentQuestionData.user.is_paid) {
+                            window.location.href = 'loading.html';
+                        } else {
+                            window.location.href = 'download.html';
+                        }
+                    }
+                } else {
+                    console.error('Error saving answer:', data.error);
+                    window.TelegramWebApp.showAlert('Ошибка при сохранении ответа: ' + (data.error || data.detail));
+                }
+            } catch (error) {
+                console.error('Error saving answer:', error);
+                window.TelegramWebApp.showAlert('Ошибка при сохранении ответа');
+            }
+        }
+
+        // Показать главную кнопку для отправки ответа
+        function updateMainButton() {
+            const hasText = textarea.val().trim().length > 0;
+            if (hasText) {
+                window.TelegramWebApp.showMainButton('Следующий вопрос', submitAnswer);
+            } else {
+                window.TelegramWebApp.hideMainButton();
+            }
+        }
 
         // Проверка наличия текста в области ввода
-        textarea.on('input', function() {
-            const hasText = $(this).val().trim().length > 0;
-            if (hasText) {
-                window.TelegramWebApp.showMainButton('Следующий вопрос');
-            } else {
-                window.TelegramWebApp.hideMainButton();
-            }
-        });
+        textarea.on('input', updateMainButton);
 
         // Обработка микрофона - транскрибация речи в текст
         $('.micro-button').click(function() {
             window.TelegramWebApp.hapticFeedback('heavy');
             startVoiceTranscription();
         });
+
+        // Загружаем первый вопрос при инициализации
+        loadCurrentQuestion();
+        
+        // Для тестирования - сохраняем тестовый ID
+        if (!localStorage.getItem('test_telegram_id')) {
+            localStorage.setItem('test_telegram_id', '123456789');
+        }
         
         function startVoiceTranscription() {
             // Сначала пробуем использовать нативные возможности Telegram
@@ -553,10 +671,40 @@ $(function() {
         window.TelegramWebApp.hideMainButton();
         window.TelegramWebApp.hideBackButton();
 
-        // Симуляция обработки данных
-        setTimeout(function() {
-            window.location.href = 'price.html';
-        }, 5000); // 5 секунд загрузки
+        // Получаем Telegram ID и генерируем отчет
+        const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 
+                          parseInt(localStorage.getItem('test_telegram_id')) || 
+                          123456789;
+
+        // Проверяем статус пользователя и генерируем отчет
+        async function checkUserStatusAndGenerateReport() {
+            try {
+                // Получаем информацию о пользователе
+                const progressResponse = await fetch(`/api/user/${telegramId}/progress`);
+                const progressData = await progressResponse.json();
+                
+                if (progressResponse.ok && progressData.user.test_completed) {
+                    // Если тест завершен, переходим сразу к скачиванию
+                    setTimeout(() => {
+                        window.location.href = 'download.html';
+                    }, 3000);
+                } else {
+                    // Если тест не завершен (недостаточно ответов), переходим к тарифам
+                    setTimeout(() => {
+                        window.location.href = 'price.html';
+                    }, 3000);
+                }
+            } catch (error) {
+                console.error('Error checking user status:', error);
+                // В случае ошибки переходим к тарифам
+                setTimeout(() => {
+                    window.location.href = 'price.html';
+                }, 3000);
+            }
+        }
+
+        // Запускаем проверку
+        checkUserStatusAndGenerateReport();
     }
 
     function initAnswersPage() {
@@ -570,16 +718,42 @@ $(function() {
         // Показать кнопку назад
         window.TelegramWebApp.showBackButton();
 
+        // Получаем Telegram ID пользователя
+        const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 
+                          parseInt(localStorage.getItem('test_telegram_id')) || 
+                          123456789;
+
         // Обработка выбора тарифа
-        $('.price-plan-action .button').click(function(e) {
+        $('.price-plan-action .button').click(async function(e) {
             e.preventDefault();
             window.TelegramWebApp.hapticFeedback('medium');
             
             const planType = $(this).closest('.free-price-plan').length > 0 ? 'free' : 'paid';
             
             if (planType === 'free') {
-                // Бесплатный план - сразу к результатам
-                window.location.href = 'answers.html';
+                // Бесплатный план - проверяем количество ответов
+                try {
+                    const progressResponse = await fetch(`/api/user/${telegramId}/progress`);
+                    const progressData = await progressResponse.json();
+                    
+                    if (progressResponse.ok) {
+                        if (progressData.progress.answered >= 15) {
+                            // Достаточно ответов для бесплатного отчета
+                            window.location.href = 'download.html';
+                        } else {
+                            // Недостаточно ответов
+                            window.TelegramWebApp.showAlert(`Для бесплатного отчета нужно ответить на все 15 вопросов. Вы ответили на ${progressData.progress.answered}.`);
+                            setTimeout(() => {
+                                window.location.href = 'question.html';
+                            }, 2000);
+                        }
+                    } else {
+                        window.TelegramWebApp.showAlert('Ошибка получения данных пользователя');
+                    }
+                } catch (error) {
+                    console.error('Error checking user progress:', error);
+                    window.TelegramWebApp.showAlert('Ошибка проверки прогресса');
+                }
             } else {
                 // Платный план - к оплате
                 window.location.href = 'complete-payment.html';
@@ -599,23 +773,72 @@ $(function() {
     }
 
     function initDownloadPage() {
+        // Получаем Telegram ID пользователя
+        const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 
+                          parseInt(localStorage.getItem('test_telegram_id')) || 
+                          123456789;
+
         // Показать кнопку "Завершить"
         window.TelegramWebApp.showMainButton('Завершить', function() {
-            // Отправить данные в бота и закрыть приложение
-            const userData = {
-                profile: JSON.parse(localStorage.getItem('userProfile') || '{}'),
-                answers: JSON.parse(localStorage.getItem('userAnswers') || '[]'),
-                completed: true,
-                timestamp: new Date().toISOString()
-            };
-            
-            window.TelegramWebApp.sendData(userData);
+            // Закрыть приложение
+            window.TelegramWebApp.close();
         });
 
-        // Обработка скачивания
-        $('.button-download').click(function() {
+        // Обработка скачивания отчета
+        $('.button-download').click(async function() {
             window.TelegramWebApp.hapticFeedback('medium');
-            // Логика скачивания файла
+            
+            try {
+                // Скачиваем отчет через API
+                const response = await fetch(`/api/download/report/${telegramId}`);
+                
+                if (response.ok) {
+                    // Создаем blob из ответа
+                    const blob = await response.blob();
+                    
+                    // Создаем ссылку для скачивания
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `prizma-report-${telegramId}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    window.TelegramWebApp.hapticFeedback('success');
+                } else {
+                    const errorData = await response.json();
+                    window.TelegramWebApp.showAlert('Ошибка при скачивании отчета: ' + (errorData.detail || 'неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Error downloading report:', error);
+                window.TelegramWebApp.showAlert('Ошибка при скачивании отчета');
+            }
         });
+
+        // Проверяем статус пользователя при загрузке страницы
+        async function checkUserStatus() {
+            try {
+                const response = await fetch(`/api/user/${telegramId}/progress`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Обновляем информацию на странице если есть соответствующие элементы
+                    if ($('.answers-count').length) {
+                        $('.answers-count').text(data.progress.answered);
+                    }
+                    
+                    if (!data.user.test_completed) {
+                        // Если тест не завершен, показываем предупреждение
+                        window.TelegramWebApp.showAlert('Внимание: тест не завершен полностью');
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking user status:', error);
+            }
+        }
+        
+        checkUserStatus();
     }
 }); 
