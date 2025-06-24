@@ -102,22 +102,30 @@
             },
 
             showBackButton: function(callback) {
-                if (!this.tg) return;
+                if (!this.tg || !this.tg.BackButton) return;
                 
-                this.tg.BackButton.show();
-                
-                if (callback) {
-                    this.tg.BackButton.onClick(callback);
-                } else {
-                    this.tg.BackButton.onClick(function() {
-                        window.history.back();
-                    });
+                try {
+                    this.tg.BackButton.show();
+                    
+                    if (callback) {
+                        this.tg.BackButton.onClick(callback);
+                    } else {
+                        this.tg.BackButton.onClick(function() {
+                            window.history.back();
+                        });
+                    }
+                } catch (error) {
+                    console.log('⬅️ BackButton не поддерживается:', error);
                 }
             },
 
             hideBackButton: function() {
-                if (!this.tg) return;
-                this.tg.BackButton.hide();
+                if (!this.tg || !this.tg.BackButton) return;
+                try {
+                    this.tg.BackButton.hide();
+                } catch (error) {
+                    console.log('⬅️ BackButton не поддерживается:', error);
+                }
             },
 
             sendData: function(data) {

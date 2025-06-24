@@ -74,7 +74,11 @@ $(function() {
 
     // Telegram Web App специфичный код - инициализация с задержкой
     function initTelegramApp() {
-        if (window.TelegramWebApp) {
+        console.log('🔄 Попытка инициализации TelegramApp...');
+        console.log('📱 window.TelegramWebApp:', !!window.TelegramWebApp);
+        console.log('📱 window.Telegram:', !!window.Telegram);
+        
+        if (window.TelegramWebApp && window.TelegramWebApp.tg) {
             // Инициализация для разных страниц
             const currentPage = getCurrentPage();
             console.log('🎯 Current page detected:', currentPage);
@@ -91,6 +95,7 @@ $(function() {
                     initLoginPage();
                     break;
                 case 'question':
+                    console.log('🎯 Запускаем initQuestionPage...');
                     initQuestionPage();
                     break;
                 case 'loading':
@@ -115,8 +120,41 @@ $(function() {
         }
     }
     
-    // Запуск инициализации с небольшой задержкой
-    setTimeout(initTelegramApp, 50);
+    // Вспомогательные функции для безопасной работы с Telegram API
+    function safeMainButton(action, ...args) {
+        try {
+            if (window.TelegramWebApp && window.TelegramWebApp.MainButton) {
+                return window.TelegramWebApp.MainButton[action](...args);
+            } else {
+                console.log(`❌ MainButton.${action} не поддерживается`);
+                return false;
+            }
+        } catch (error) {
+            console.error(`❌ Ошибка MainButton.${action}:`, error);
+            return false;
+        }
+    }
+    
+    function safeBackButton(action, ...args) {
+        try {
+            if (window.TelegramWebApp && window.TelegramWebApp.BackButton) {
+                return window.TelegramWebApp.BackButton[action](...args);
+            } else {
+                console.log(`❌ BackButton.${action} не поддерживается`);
+                return false;
+            }
+        } catch (error) {
+            console.error(`❌ Ошибка BackButton.${action}:`, error);
+            return false;
+        }
+    }
+
+    // Запуск инициализации
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTelegramApp);
+    } else {
+        initTelegramApp();
+    }
 
     function getCurrentPage() {
         const path = window.location.pathname;
@@ -126,11 +164,13 @@ $(function() {
 
     function initIndexPage() {
         // Развернуть viewport
-        window.TelegramWebApp.expandViewport();
+        if (window.TelegramWebApp && window.TelegramWebApp.expandViewport) {
+            window.TelegramWebApp.expandViewport();
+        }
         
         // Скрыть стандартные кнопки
-        window.TelegramWebApp.MainButton.hide();
-        window.TelegramWebApp.BackButton.hide();
+        safeMainButton('hide');
+        safeBackButton('hide');
 
         // Обработка кнопки "Начать анализ"
         $('.button[href="steps.html"]').click(function(e) {
@@ -141,8 +181,14 @@ $(function() {
     }
 
     function initStepsPage() {
-        // Показать кнопку назад
-        window.TelegramWebApp.BackButton.show();
+        // Показать кнопку назад (если поддерживается)
+        try {
+            if (window.TelegramWebApp.BackButton) {
+                window.TelegramWebApp.BackButton.show();
+            }
+        } catch (error) {
+            console.log('⬅️ BackButton не поддерживается:', error);
+        }
         
         // Добавить обработчики для кнопок шагов
         $('.button').click(function() {
@@ -152,8 +198,14 @@ $(function() {
 
     function initLoginPage() {
         console.log('initLoginPage() called');
-        // Показать кнопку назад
-        window.TelegramWebApp.BackButton.show();
+        // Показать кнопку назад (если поддерживается)
+        try {
+            if (window.TelegramWebApp.BackButton) {
+                window.TelegramWebApp.BackButton.show();
+            }
+        } catch (error) {
+            console.log('⬅️ BackButton не поддерживается:', error);
+        }
         
         // Получить данные пользователя из Telegram
         const userData = window.TelegramWebApp.initDataUnsafe || {};
@@ -335,18 +387,21 @@ $(function() {
         console.log('🎯 ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ ВОПРОСОВ');
         console.log('🎯 =============================================================');
         
-        // Показать кнопку назад
-        window.TelegramWebApp.BackButton.show();
-        console.log('⬅️ BackButton показана');
+        // Показать кнопку назад (если поддерживается)
+        console.log('⬅️ Пытаемся показать BackButton');
+        safeBackButton('show');
         
         // Переменные для работы с API
         let currentTelegramId = null;
         let currentQuestionData = null;
         const API_BASE_URL = window.location.origin;
+        console.log('🌐 API_BASE_URL установлен в:', API_BASE_URL);
         
         // Получаем Telegram ID пользователя через унифицированный API
         function getTelegramUserId() {
-            return window.TelegramWebApp.getUserId();
+            const userId = window.TelegramWebApp.getUserId();
+            console.log('👤 getTelegramUserId() вернул:', userId);
+            return userId;
         }
         
         // Загрузка текущего вопроса
@@ -490,15 +545,24 @@ $(function() {
         
         // Настройка MainButton
         console.log('🔧 Настраиваем MainButton...');
+        console.log('🔧 window.TelegramWebApp:', !!window.TelegramWebApp);
+        console.log('🔧 window.TelegramWebApp.MainButton:', !!window.TelegramWebApp?.MainButton);
+        
         try {
-            window.TelegramWebApp.MainButton.setText('Следующий вопрос');
-            window.TelegramWebApp.MainButton.show();
-            window.TelegramWebApp.MainButton.onClick(submitAnswer);
-            console.log('✅ MainButton настроена успешно');
+            if (window.TelegramWebApp && window.TelegramWebApp.MainButton) {
+                window.TelegramWebApp.MainButton.setText('Следующий вопрос');
+                window.TelegramWebApp.MainButton.show();
+                window.TelegramWebApp.MainButton.onClick(submitAnswer);
+                console.log('✅ MainButton настроена успешно');
+            } else {
+                console.log('❌ MainButton не доступна, используем HTML кнопку');
+                // Fallback на HTML кнопку
+                $('#nextButton').show().off('click').on('click', submitAnswer);
+            }
         } catch (error) {
             console.error('❌ Ошибка настройки MainButton:', error);
             // Fallback на HTML кнопку
-            $('#nextButton').show().click(submitAnswer);
+            $('#nextButton').show().off('click').on('click', submitAnswer);
         }
         
         // Обработка Enter в textarea
@@ -742,8 +806,14 @@ $(function() {
     }
 
     function initPricePage() {
-        // Показать кнопку назад
-        window.TelegramWebApp.BackButton.show();
+        // Показать кнопку назад (если поддерживается)
+        try {
+            if (window.TelegramWebApp.BackButton) {
+                window.TelegramWebApp.BackButton.show();
+            }
+        } catch (error) {
+            console.log('⬅️ BackButton не поддерживается:', error);
+        }
 
         // Получаем Telegram ID пользователя
         const telegramId = window.TelegramWebApp.getUserId();
@@ -787,8 +857,14 @@ $(function() {
     }
 
     function initPaymentPage() {
-        // Показать кнопку назад
-        window.TelegramWebApp.BackButton.show();
+        // Показать кнопку назад (если поддерживается)
+        try {
+            if (window.TelegramWebApp.BackButton) {
+                window.TelegramWebApp.BackButton.show();
+            }
+        } catch (error) {
+            console.log('⬅️ BackButton не поддерживается:', error);
+        }
 
         // Обработка успешной оплаты
         $('.button').click(function() {
