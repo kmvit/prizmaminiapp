@@ -72,44 +72,51 @@ $(function() {
         });
     }
 
-    // Telegram Web App специфичный код
-    if (window.TelegramWebApp) {
-        
-        // Инициализация для разных страниц
-        const currentPage = getCurrentPage();
-        console.log('Current page detected:', currentPage);
-        console.log('Current URL:', window.location.href);
-        
-        switch(currentPage) {
-            case 'index':
-                initIndexPage();
-                break;
-            case 'steps':
-                initStepsPage();
-                break;
-            case 'login':
-                initLoginPage();
-                break;
-            case 'question':
-                initQuestionPage();
-                break;
-            case 'loading':
-                initLoadingPage();
-                break;
-            case 'answers':
-                initAnswersPage();
-                break;
-            case 'price':
-                initPricePage();
-                break;
-            case 'payment':
-                initPaymentPage();
-                break;
-            case 'download':
-                initDownloadPage();
-                break;
+    // Telegram Web App специфичный код - инициализация с задержкой
+    function initTelegramApp() {
+        if (window.TelegramWebApp) {
+            // Инициализация для разных страниц
+            const currentPage = getCurrentPage();
+            console.log('🎯 Current page detected:', currentPage);
+            console.log('🔗 Current URL:', window.location.href);
+            
+            switch(currentPage) {
+                case 'index':
+                    initIndexPage();
+                    break;
+                case 'steps':
+                    initStepsPage();
+                    break;
+                case 'login':
+                    initLoginPage();
+                    break;
+                case 'question':
+                    initQuestionPage();
+                    break;
+                case 'loading':
+                    initLoadingPage();
+                    break;
+                case 'answers':
+                    initAnswersPage();
+                    break;
+                case 'price':
+                    initPricePage();
+                    break;
+                case 'payment':
+                    initPaymentPage();
+                    break;
+                case 'download':
+                    initDownloadPage();
+                    break;
+            }
+        } else {
+            console.log('⏳ TelegramWebApp not ready, retrying...');
+            setTimeout(initTelegramApp, 100);
         }
     }
+    
+    // Запуск инициализации с небольшой задержкой
+    setTimeout(initTelegramApp, 50);
 
     function getCurrentPage() {
         const path = window.location.pathname;
@@ -150,7 +157,7 @@ $(function() {
         
         // Получить данные пользователя из Telegram
         const userData = window.TelegramWebApp.initDataUnsafe || {};
-        const telegramId = userData.user?.id || 123456789; // Тестовый ID для отладки
+        const telegramId = window.TelegramWebApp.getUserId();
         
         console.log('Telegram ID:', telegramId);
         console.log('User Data:', userData);
@@ -324,10 +331,13 @@ $(function() {
     }
 
     function initQuestionPage() {
-        console.log('🎯 Инициализация страницы вопросов');
+        console.log('🎯 =============================================================');
+        console.log('🎯 ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ ВОПРОСОВ');
+        console.log('🎯 =============================================================');
         
         // Показать кнопку назад
         window.TelegramWebApp.BackButton.show();
+        console.log('⬅️ BackButton показана');
         
         // Переменные для работы с API
         let currentTelegramId = null;
@@ -343,24 +353,32 @@ $(function() {
         async function loadCurrentQuestion() {
             try {
                 currentTelegramId = getTelegramUserId();
-                console.log('Loading question for user:', currentTelegramId);
+                console.log('📡 Loading question for user:', currentTelegramId);
+                console.log('🌐 API_BASE_URL:', API_BASE_URL);
                 
                 if (!currentTelegramId) {
                     throw new Error('Не удалось получить Telegram ID пользователя');
                 }
                 
-                const response = await fetch(`${API_BASE_URL}/api/user/${currentTelegramId}/current-question`);
+                const requestUrl = `${API_BASE_URL}/api/user/${currentTelegramId}/current-question`;
+                console.log('📡 Request URL:', requestUrl);
+                
+                const response = await fetch(requestUrl);
+                console.log('📡 Response status:', response.status);
+                
                 const data = await response.json();
+                console.log('📡 Response data:', data);
                 
                 if (response.ok) {
                     currentQuestionData = data;
                     displayQuestion(data);
+                    console.log('✅ Question loaded successfully');
                 } else {
-                    console.error('Error loading question:', data.error);
+                    console.error('❌ Error loading question:', data.error);
                     $('#questionText').text('Ошибка загрузки вопроса: ' + (data.error || data.detail || 'неизвестная ошибка'));
                 }
             } catch (error) {
-                console.error('Error loading question:', error);
+                console.error('💥 Exception loading question:', error);
                 $('#questionText').text('Ошибка загрузки вопроса: ' + error.message);
             }
         }
@@ -471,9 +489,17 @@ $(function() {
         }
         
         // Настройка MainButton
-        window.TelegramWebApp.MainButton.setText('Следующий вопрос');
-        window.TelegramWebApp.MainButton.show();
-        window.TelegramWebApp.MainButton.onClick(submitAnswer);
+        console.log('🔧 Настраиваем MainButton...');
+        try {
+            window.TelegramWebApp.MainButton.setText('Следующий вопрос');
+            window.TelegramWebApp.MainButton.show();
+            window.TelegramWebApp.MainButton.onClick(submitAnswer);
+            console.log('✅ MainButton настроена успешно');
+        } catch (error) {
+            console.error('❌ Ошибка настройки MainButton:', error);
+            // Fallback на HTML кнопку
+            $('#nextButton').show().click(submitAnswer);
+        }
         
         // Обработка Enter в textarea
         $('#questionArea').on('keydown', function(e) {
@@ -489,12 +515,16 @@ $(function() {
         });
         
         // Загружаем вопрос при инициализации
+        console.log('🔄 Вызываем loadCurrentQuestion...');
         loadCurrentQuestion();
         
         // Для тестирования
         if (!localStorage.getItem('test_telegram_id')) {
             localStorage.setItem('test_telegram_id', '123456789');
+            console.log('💾 Установлен тестовый ID: 123456789');
         }
+        
+        console.log('🎯 ============ ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА ============');
         
         function startVoiceTranscription() {
             // Сначала пробуем использовать нативные возможности Telegram
