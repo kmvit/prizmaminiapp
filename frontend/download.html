@@ -88,7 +88,8 @@ function getTelegramUserId() {
 
 // Проверка, работаем ли мы в Telegram Web App
 function isInTelegramWebApp() {
-    return window.TelegramWebApp && window.TelegramWebApp.initData;
+    return !!(window.Telegram && window.Telegram.WebApp) || 
+           !!(window.TelegramWebApp && window.TelegramWebApp.tg);
 }
 
 // Универсальное скачивание отчета (умный выбор метода)
@@ -155,7 +156,7 @@ async function downloadPersonalReport(fallback = false) {
                             if (success) {
                                 $span.text('Отчет скачан!');
                                 if (window.TelegramWebApp.hapticFeedback) {
-                                    window.TelegramWebApp.hapticFeedback('success');
+                                    window.TelegramWebApp.hapticFeedback('light');
                                 }
                                 if (window.TelegramWebApp.showAlert) {
                                     window.TelegramWebApp.showAlert('✅ Отчет успешно скачан!\n\n📄 Найдите файл prizma-report-' + telegramId + '.pdf в загрузках вашего устройства.');
@@ -174,20 +175,37 @@ async function downloadPersonalReport(fallback = false) {
                 const downloadUrl = reportUrl + '?download=1&source=telegram&t=' + Date.now();
                 console.log('🔗 Открываем через Telegram openLink:', downloadUrl);
                 
-                if (window.TelegramWebApp.openLink) {
-                    window.TelegramWebApp.openLink(downloadUrl);
+                // Используем правильный API в зависимости от доступности
+                let telegramAPI = null;
+                if (window.Telegram && window.Telegram.WebApp) {
+                    telegramAPI = window.Telegram.WebApp;
+                } else if (window.TelegramWebApp && window.TelegramWebApp.tg) {
+                    telegramAPI = window.TelegramWebApp.tg;
+                } else if (window.TelegramWebApp) {
+                    telegramAPI = window.TelegramWebApp;
+                }
+                
+                if (telegramAPI && telegramAPI.openLink) {
+                    telegramAPI.openLink(downloadUrl);
                     
                     $span.text('Отчет открыт!');
                     
-                    if (window.TelegramWebApp.hapticFeedback) {
-                        window.TelegramWebApp.hapticFeedback('success');
+                    // Тактильная обратная связь
+                    try {
+                        if (telegramAPI.HapticFeedback) {
+                            telegramAPI.HapticFeedback.impactOccurred('light');
+                        } else if (telegramAPI.hapticFeedback) {
+                            telegramAPI.hapticFeedback('light');
+                        }
+                    } catch (e) {
+                        console.log('⚠️ Не удалось вызвать тактильную обратную связь:', e);
                     }
                     
-                    if (window.TelegramWebApp.showAlert) {
-                        window.TelegramWebApp.showAlert('📁 Отчет открыт в браузере!\n\n' +
-                            '💡 В открывшемся браузере нажмите кнопку "Скачать" или найдите файл в загрузках.\n\n' +
-                            '📄 Имя файла: prizma-report-' + telegramId + '.pdf\n\n' +
-                            '⚠️ Если скачивание не началось, попробуйте альтернативную кнопку ниже.');
+                    if (telegramAPI.showAlert) {
+                        telegramAPI.showAlert('📁 Отчет открыт в браузере!\n\n' +
+                            '💡 Браузер должен автоматически скачать файл.\n' +
+                            'Если этого не произошло - проверьте папку "Загрузки".\n\n' +
+                            '📄 Имя файла: prizma-report-' + telegramId + '.pdf');
                     }
                     
                     // Показываем альтернативные кнопки через 3 секунды
@@ -246,7 +264,7 @@ async function downloadPersonalReport(fallback = false) {
             $span.text('Отчет скачан!');
             
             if (isInTelegramWebApp() && window.TelegramWebApp.hapticFeedback) {
-                window.TelegramWebApp.hapticFeedback('success');
+                window.TelegramWebApp.hapticFeedback('light');
             }
             
             console.log('✅ Скачивание завершено успешно');
@@ -320,10 +338,20 @@ $(document).ready(function() {
         const telegramId = getTelegramUserId();
         const directUrl = `${API_BASE_URL}/api/download/report/${telegramId}?download=1&direct=1&t=${Date.now()}`;
         
-        if (isInTelegramWebApp() && window.TelegramWebApp.openLink) {
-            window.TelegramWebApp.openLink(directUrl);
-            if (window.TelegramWebApp.showAlert) {
-                window.TelegramWebApp.showAlert('📁 Файл открыт в браузере!\n\nИспользуйте меню браузера "Сохранить как..." для скачивания файла.');
+        // Используем правильный API
+        let telegramAPI = null;
+        if (window.Telegram && window.Telegram.WebApp) {
+            telegramAPI = window.Telegram.WebApp;
+        } else if (window.TelegramWebApp && window.TelegramWebApp.tg) {
+            telegramAPI = window.TelegramWebApp.tg;
+        } else if (window.TelegramWebApp) {
+            telegramAPI = window.TelegramWebApp;
+        }
+        
+        if (isInTelegramWebApp() && telegramAPI && telegramAPI.openLink) {
+            telegramAPI.openLink(directUrl);
+            if (telegramAPI.showAlert) {
+                telegramAPI.showAlert('📁 Файл открыт в браузере!\n\nИспользуйте меню браузера "Сохранить как..." для скачивания файла.');
             }
         } else {
             window.open(directUrl, '_blank');
@@ -356,8 +384,18 @@ async function checkUserStatusOnLoad() {
             if (!data.user.test_completed) {
                 console.log('⚠️ Тест не завершен, перенаправляем...');
                 
-                if (isInTelegramWebApp() && window.TelegramWebApp.showAlert) {
-                    window.TelegramWebApp.showAlert('⚠️ Тест не завершен!\n\nВернитесь к прохождению теста для получения отчета.');
+                // Используем правильный API
+                let telegramAPI = null;
+                if (window.Telegram && window.Telegram.WebApp) {
+                    telegramAPI = window.Telegram.WebApp;
+                } else if (window.TelegramWebApp && window.TelegramWebApp.tg) {
+                    telegramAPI = window.TelegramWebApp.tg;
+                } else if (window.TelegramWebApp) {
+                    telegramAPI = window.TelegramWebApp;
+                }
+                
+                if (isInTelegramWebApp() && telegramAPI && telegramAPI.showAlert) {
+                    telegramAPI.showAlert('⚠️ Тест не завершен!\n\nВернитесь к прохождению теста для получения отчета.');
                     setTimeout(() => {
                         window.location.href = 'question.html';
                     }, 2000);

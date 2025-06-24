@@ -146,9 +146,36 @@
             },
 
             hapticFeedback: function(type) {
-                if (!this.tg) return;
-                type = type || 'medium';
-                this.tg.HapticFeedback.impactOccurred(type);
+                if (!this.tg || !this.tg.HapticFeedback) return;
+                // Используем только валидные параметры для исправления WebappHapticImpactStyleInvalid
+                const validTypes = ['light', 'medium', 'heavy'];
+                const validType = validTypes.includes(type) ? type : 'medium';
+                try {
+                    this.tg.HapticFeedback.impactOccurred(validType);
+                } catch (e) {
+                    console.log('⚠️ Не удалось вызвать тактильную обратную связь:', e);
+                }
+            },
+
+            // Централизованная функция для получения Telegram ID
+            getUserId: function() {
+                if (this.tg?.initDataUnsafe?.user?.id) {
+                    return this.tg.initDataUnsafe.user.id;
+                }
+                const testId = localStorage.getItem('test_telegram_id');
+                return testId ? parseInt(testId) : 123456789;
+            },
+
+            // Унифицированная обработка ошибок API
+            handleError: function(error, defaultMessage = 'Произошла ошибка') {
+                console.error('API Error:', error);
+                const message = error?.message || error?.error || error?.detail || defaultMessage;
+                this.showAlert(message);
+            },
+
+            // Проверка доступности в Telegram среде  
+            isInTelegramWebApp: function() {
+                return !!(window.Telegram?.WebApp || window.TelegramWebApp?.tg);
             },
 
             expandViewport: function() {

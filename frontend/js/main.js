@@ -1,4 +1,6 @@
 'use strict';
+// Этот файл используется только для браузерной версии (не Telegram)
+// Основная логика для Telegram в main-telegram.js
 $(function() {
     // Исходные стили
     const closedStyle = {
