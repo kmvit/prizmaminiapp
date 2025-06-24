@@ -197,22 +197,21 @@ $(function() {
     }
 
     function initLoginPage() {
-        console.log('initLoginPage() called');
+        console.log('👤 =============================================================');
+        console.log('👤 ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ ЛОГИНА');
+        console.log('👤 =============================================================');
+        
         // Показать кнопку назад (если поддерживается)
-        try {
-            if (window.TelegramWebApp.BackButton) {
-                window.TelegramWebApp.BackButton.show();
-            }
-        } catch (error) {
-            console.log('⬅️ BackButton не поддерживается:', error);
-        }
+        safeBackButton('show');
         
         // Получить данные пользователя из Telegram
         const userData = window.TelegramWebApp.initDataUnsafe || {};
         const telegramId = window.TelegramWebApp.getUserId();
         
-        console.log('Telegram ID:', telegramId);
-        console.log('User Data:', userData);
+        console.log('👤 Telegram ID:', telegramId);
+        console.log('👤 User Data:', userData);
+        console.log('👤 window.TelegramWebApp доступен:', !!window.TelegramWebApp);
+        console.log('👤 window.TelegramWebApp.getUserId доступен:', !!window.TelegramWebApp?.getUserId);
         
         // Асинхронная функция для загрузки профиля пользователя
         async function loadUserProfile() {
@@ -329,8 +328,8 @@ $(function() {
             }
 
             // Показать индикатор загрузки
-            window.TelegramWebApp.MainButton.setText('Сохранение...');
-            window.TelegramWebApp.MainButton.show();
+            safeMainButton('setText', 'Сохранение...');
+            safeMainButton('show');
             
             // Сохранить данные в базу
             const saved = await saveProfile(name, age, gender);
@@ -347,15 +346,27 @@ $(function() {
                 window.location.href = 'question.html';
             } else {
                 // Восстановить кнопку
-                window.TelegramWebApp.MainButton.setText('Продолжить');
-                window.TelegramWebApp.MainButton.show();
+                safeMainButton('setText', 'Продолжить');
+                safeMainButton('show');
             }
         }
 
         // Регистрируем обработчик главной кнопки один раз
         if (!mainButtonHandlerRegistered) {
-            window.TelegramWebApp.onEvent('mainButtonClicked', handleContinue);
-            mainButtonHandlerRegistered = true;
+            try {
+                if (window.TelegramWebApp && window.TelegramWebApp.onEvent) {
+                    window.TelegramWebApp.onEvent('mainButtonClicked', handleContinue);
+                    console.log('✅ MainButton обработчик зарегистрирован');
+                } else if (window.TelegramWebApp && window.TelegramWebApp.MainButton && window.TelegramWebApp.MainButton.onClick) {
+                    window.TelegramWebApp.MainButton.onClick(handleContinue);
+                    console.log('✅ MainButton onClick обработчик зарегистрирован');
+                } else {
+                    console.log('❌ MainButton обработчики не поддерживаются');
+                }
+                mainButtonHandlerRegistered = true;
+            } catch (error) {
+                console.error('❌ Ошибка регистрации MainButton обработчика:', error);
+            }
         }
 
         // Обработка HTML кнопки "Продолжить"
@@ -371,10 +382,10 @@ $(function() {
             const gender = $('#genderInput').val();
             
             if (name && age && gender) {
-                window.TelegramWebApp.MainButton.setText('Продолжить');
-                window.TelegramWebApp.MainButton.show();
+                safeMainButton('setText', 'Продолжить');
+                safeMainButton('show');
             } else {
-                window.TelegramWebApp.MainButton.hide();
+                safeMainButton('hide');
             }
         }
 
