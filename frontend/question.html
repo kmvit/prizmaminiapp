@@ -169,21 +169,45 @@ async function submitAnswer() {
             })
         });
         
-        const data = await response.json();
+        console.log('📡 Response status:', response.status);
+        console.log('📡 Response headers:', response.headers);
+        
+        const responseText = await response.text();
+        console.log('📡 Raw response text:', responseText);
+        
+        let data;
+        try {
+            data = JSON.parse(responseText);
+            console.log('📡 Parsed response data:', data);
+        } catch (e) {
+            console.error('❌ Ошибка парсинга JSON:', e);
+            console.log('📡 Response text that failed to parse:', responseText);
+            throw new Error('Сервер вернул некорректный JSON: ' + responseText);
+        }
         
         if (response.ok) {
+            console.log('✅ Ответ от сервера получен успешно');
+            console.log('📊 Data status:', data.status);
+            console.log('📊 Full data object:', JSON.stringify(data, null, 2));
+            
             // Тактильная обратная связь при успехе
             if (window.TelegramWebApp && window.TelegramWebApp.hapticFeedback) {
                 window.TelegramWebApp.hapticFeedback('success');
             }
             
             if (data.status === 'next_question') {
+                console.log('🔄 Переходим к следующему вопросу');
+                console.log('📝 Next question:', data.next_question);
+                console.log('📈 Progress:', data.progress);
+                
                 // Переходим к следующему вопросу
                 currentQuestionData = {
                     question: data.next_question,
                     progress: data.progress,
                     user: currentQuestionData.user
                 };
+                
+                console.log('🎯 Обновляем интерфейс с новым вопросом');
                 displayQuestion(currentQuestionData);
                 
                 // Очищаем textarea
@@ -193,6 +217,8 @@ async function submitAnswer() {
                 showSuccessMessage('Ответ сохранен!');
                 
             } else if (data.status === 'test_completed') {
+                console.log('🏁 Тест завершен');
+                
                 // Тест завершен
                 const message = data.message || 'Тест завершен!';
                 if (window.currentTelegramAPI && window.currentTelegramAPI.showAlert) {
@@ -205,20 +231,37 @@ async function submitAnswer() {
                 setTimeout(() => {
                     window.location.href = 'download.html';
                 }, 1500);
+            } else {
+                console.log('❓ Неизвестный статус ответа:', data.status);
+                console.log('❓ Полные данные:', data);
             }
         } else {
-            console.error('Error saving answer:', data.error);
-            const errorMsg = 'Ошибка при сохранении ответа: ' + data.error;
-            if (window.TelegramWebApp && window.TelegramWebApp.showAlert) {
+            console.error('❌ Ошибка HTTP:', response.status, response.statusText);
+            console.error('❌ Data:', data);
+            
+            const errorMsg = 'Ошибка при сохранении ответа: ' + (data.error || data.detail || 'неизвестная ошибка');
+            console.error('❌ Showing error:', errorMsg);
+            
+            if (window.currentTelegramAPI && window.currentTelegramAPI.showAlert) {
+                window.currentTelegramAPI.showAlert(errorMsg);
+            } else if (window.TelegramWebApp && window.TelegramWebApp.showAlert) {
                 window.TelegramWebApp.showAlert(errorMsg);
             } else {
                 alert(errorMsg);
             }
         }
     } catch (error) {
-        console.error('Error saving answer:', error);
-        const errorMsg = 'Ошибка при сохранении ответа';
-        if (window.TelegramWebApp && window.TelegramWebApp.showAlert) {
+        console.error('💥 Исключение при отправке ответа:', error);
+        console.error('💥 Error name:', error.name);
+        console.error('💥 Error message:', error.message);
+        console.error('💥 Error stack:', error.stack);
+        
+        const errorMsg = 'Ошибка при сохранении ответа: ' + error.message;
+        console.error('💥 Showing error alert:', errorMsg);
+        
+        if (window.currentTelegramAPI && window.currentTelegramAPI.showAlert) {
+            window.currentTelegramAPI.showAlert(errorMsg);
+        } else if (window.TelegramWebApp && window.TelegramWebApp.showAlert) {
             window.TelegramWebApp.showAlert(errorMsg);
         } else {
             alert(errorMsg);
