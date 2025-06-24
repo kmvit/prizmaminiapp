@@ -554,27 +554,21 @@ $(function() {
             }, 2000);
         }
         
-        // Настройка MainButton
-        console.log('🔧 Настраиваем MainButton...');
-        console.log('🔧 window.TelegramWebApp:', !!window.TelegramWebApp);
-        console.log('🔧 window.TelegramWebApp.MainButton:', !!window.TelegramWebApp?.MainButton);
+        // Скрыть Telegram MainButton и использовать только HTML кнопку
+        console.log('🔧 Отключаем MainButton и используем HTML кнопку...');
         
         try {
             if (window.TelegramWebApp && window.TelegramWebApp.MainButton) {
-                window.TelegramWebApp.MainButton.setText('Следующий вопрос');
-                window.TelegramWebApp.MainButton.show();
-                window.TelegramWebApp.MainButton.onClick(submitAnswer);
-                console.log('✅ MainButton настроена успешно');
-            } else {
-                console.log('❌ MainButton не доступна, используем HTML кнопку');
-                // Fallback на HTML кнопку
-                $('#nextButton').show().off('click').on('click', submitAnswer);
+                window.TelegramWebApp.MainButton.hide();
+                console.log('✅ MainButton скрыта');
             }
         } catch (error) {
-            console.error('❌ Ошибка настройки MainButton:', error);
-            // Fallback на HTML кнопку
-            $('#nextButton').show().off('click').on('click', submitAnswer);
+            console.error('❌ Ошибка скрытия MainButton:', error);
         }
+        
+        // Используем только HTML кнопку с SVG треугольником
+        $('#nextButton').show().off('click').on('click', submitAnswer);
+        console.log('✅ HTML кнопка активирована');
         
         // Обработка Enter в textarea
         $('#questionArea').on('keydown', function(e) {
@@ -605,7 +599,7 @@ $(function() {
             // Сначала пробуем использовать нативные возможности Telegram
             if (window.TelegramWebApp && window.TelegramWebApp.platform !== 'unknown') {
                 // В Telegram всегда доступна клавиатура с микрофоном
-                window.TelegramWebApp.showAlert('Используйте кнопку микрофона на клавиатуре Telegram для голосового ввода');
+                window.TelegramWebApp.showAlert('Используйте кнопку микрофона на Вашей клавиатуре для голосового ввода');
                 
                 // Фокусируемся на поле ввода, чтобы появилась клавиатура с микрофоном
                 $('#questionArea').focus();
