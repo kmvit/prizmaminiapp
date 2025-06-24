@@ -327,91 +327,20 @@ $(function() {
         // Показать кнопку назад
         window.TelegramWebApp.BackButton.show();
         
-        // Логика MainButton теперь управляется напрямую в question.html
-        console.log('ℹ️ Логика MainButton для страницы вопросов перенесена в question.html');
+        // Логика MainButton и загрузка данных теперь полностью управляется из question.html
+        console.log('ℹ️ Логика кнопок и данных для страницы вопросов перенесена в question.html');
+        console.log('🎛️ initQuestionPage() в main-telegram.js теперь только показывает BackButton');
         
         const textarea = $('#questionArea');
-        let currentTelegramId = null;
-        let currentQuestionData = null;
 
-        // Получаем Telegram ID пользователя
-        function getTelegramUserId() {
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
-                return window.Telegram.WebApp.initDataUnsafe.user.id;
-            }
-            // Для тестирования - используем фиксированный ID
-            const testId = localStorage.getItem('test_telegram_id');
-            if (testId) {
-                return parseInt(testId);
-            }
-            return 123456789;
-        }
-
-        // Загрузка текущего вопроса с сервера
-        async function loadCurrentQuestion() {
-            try {
-                currentTelegramId = getTelegramUserId();
-                console.log('Loading question for user:', currentTelegramId);
-                
-                if (!currentTelegramId) {
-                    throw new Error('Не удалось получить Telegram ID пользователя');
-                }
-                
-                const response = await fetch(`/api/user/${currentTelegramId}/current-question`);
-                console.log('Response status:', response.status);
-                
-                const data = await response.json();
-                console.log('Response data:', data);
-                
-                if (response.ok) {
-                    currentQuestionData = data;
-                    displayQuestion(data);
-                } else {
-                    console.error('Error loading question:', data.error);
-                    window.TelegramWebApp.showAlert('Ошибка загрузки вопроса: ' + (data.error || data.detail || 'неизвестная ошибка'));
-                }
-            } catch (error) {
-                console.error('Error loading question:', error);
-                window.TelegramWebApp.showAlert('Ошибка загрузки вопроса: ' + error.message);
-            }
-        }
-
-        // Отображение вопроса
-        function displayQuestion(data) {
-            const { question, progress, user } = data;
-            
-            // Обновляем текст вопроса
-            $('#questionText').text(question.text);
-            
-            // Обновляем счетчик вопросов
-            $('.current-question').text(progress.current);
-            $('.question-count').text(progress.total);
-            
-            // Настраиваем textarea
-            textarea.val('');
-            textarea.attr('maxlength', question.max_length || 1000);
-            
-            // Показываем информацию о типе аккаунта
-            if (!user.is_paid && question.type === 'paid') {
-                $('#questionText').append('<br><small style="color: #ff6b6b;">💎 Этот вопрос доступен в премиум-версии</small>');
-            }
-            
-            console.log('Question loaded:', question);
-        }
-
-        // Обработка микрофона - транскрибация речи в текст
+        // Обработка микрофона - транскрибация речи в текст  
         $('.micro-button').click(function() {
             window.TelegramWebApp.hapticFeedback('heavy');
             startVoiceTranscription();
         });
-
-        // Загружаем первый вопрос при инициализации
-        loadCurrentQuestion();
         
-        // Для тестирования - сохраняем тестовый ID
-        if (!localStorage.getItem('test_telegram_id')) {
-            localStorage.setItem('test_telegram_id', '123456789');
-        }
+        // Остальная логика (загрузка вопроса, отправка ответов) теперь в question.html
+        console.log('🔗 Остальная логика управляется из question.html');
         
         function startVoiceTranscription() {
             // Сначала пробуем использовать нативные возможности Telegram
