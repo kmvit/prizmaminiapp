@@ -147,8 +147,14 @@ async function submitAnswer() {
     }
     
     // Тактильная обратная связь для Telegram
-    if (window.TelegramWebApp && window.TelegramWebApp.hapticFeedback) {
-        window.TelegramWebApp.hapticFeedback('medium');
+    try {
+        if (window.currentTelegramAPI && window.currentTelegramAPI.HapticFeedback) {
+            window.currentTelegramAPI.HapticFeedback.impactOccurred('medium');
+        } else if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+            window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+        }
+    } catch (e) {
+        console.log('⚠️ Не удалось вызвать тактильную обратную связь:', e);
     }
     
     console.log('Отправляем ответ:', {
@@ -191,8 +197,14 @@ async function submitAnswer() {
             console.log('📊 Full data object:', JSON.stringify(data, null, 2));
             
             // Тактильная обратная связь при успехе
-            if (window.TelegramWebApp && window.TelegramWebApp.hapticFeedback) {
-                window.TelegramWebApp.hapticFeedback('success');
+            try {
+                if (window.currentTelegramAPI && window.currentTelegramAPI.HapticFeedback) {
+                    window.currentTelegramAPI.HapticFeedback.impactOccurred('light');
+                } else if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+                    window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+                }
+            } catch (e) {
+                console.log('⚠️ Не удалось вызвать тактильную обратную связь при успехе:', e);
             }
             
             if (data.status === 'next_question') {

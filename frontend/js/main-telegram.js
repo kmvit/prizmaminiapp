@@ -335,7 +335,13 @@ $(function() {
 
         // Обработка микрофона - транскрибация речи в текст  
         $('.micro-button').click(function() {
-            window.TelegramWebApp.hapticFeedback('heavy');
+            try {
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+                    window.Telegram.WebApp.HapticFeedback.impactOccurred('heavy');
+                }
+            } catch (e) {
+                console.log('⚠️ Не удалось вызвать тактильную обратную связь для микрофона:', e);
+            }
             startVoiceTranscription();
         });
         
@@ -612,7 +618,7 @@ $(function() {
 
         // Обработка успешной оплаты
         $('.button').click(function() {
-            window.TelegramWebApp.hapticFeedback('success');
+            window.TelegramWebApp.hapticFeedback('light');
             window.location.href = 'answers.html';
         });
     }
@@ -684,7 +690,7 @@ $(function() {
                             window.URL.revokeObjectURL(blobUrl);
                             
                             if (success) {
-                                window.TelegramWebApp.hapticFeedback('success');
+                                window.TelegramWebApp.hapticFeedback('light');
                                 window.TelegramWebApp.showAlert('✅ Отчет успешно скачан!\n\n📄 Найдите файл prizma-report-' + telegramId + '.pdf в загрузках вашего устройства.');
                             } else {
                                 // Fallback к обычному методу
@@ -726,7 +732,7 @@ $(function() {
                             }
                         }, 100);
                         
-                        window.TelegramWebApp.hapticFeedback('success');
+                        window.TelegramWebApp.hapticFeedback('light');
                         window.TelegramWebApp.showAlert('📁 Отчет скачан!\n\n' +
                             '💡 Найдите файл в загрузках вашего устройства:\n' +
                             '📄 prizma-report-' + telegramId + '.pdf\n\n' +
