@@ -7,8 +7,12 @@
     <meta name="format-detection" content="telephone=no">
     <title>PRIZMA</title>
     <link rel="stylesheet" href="css/main.css">
-    <script src="js/config.js"></script>
-    <script src="js/telegram-vanilla.js"></script>
+    <script src="js/config.js?v=1735027890"></script>
+    <script src="js/telegram-vanilla.js?v=1735027890"></script>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="telegram:cache" content="false">
 </head>
 <body class="bodyQuestion">
 
@@ -45,7 +49,58 @@
 
 <script src="js/jquery.min.js"></script>
 <script src="./js/jquery-ui.min.js"></script>
-<script src="js/main-telegram.js"></script>
+<script src="js/main-telegram.js?v=1735027890"></script>
+<script>
+// Принудительное отключение Telegram MainButton для этой страницы
+$(document).ready(function() {
+    console.log('🔧 Принудительное отключение MainButton в question.html');
+    
+    // Многократная проверка и отключение
+    function forceHideMainButton() {
+        if (window.TelegramWebApp && window.TelegramWebApp.MainButton) {
+            window.TelegramWebApp.MainButton.hide();
+            console.log('🚫 MainButton принудительно скрыта');
+            
+            // Удаляем обработчики
+            if (window.TelegramWebApp.tg && window.TelegramWebApp.tg.MainButton) {
+                try {
+                    window.TelegramWebApp.tg.MainButton.offClick();
+                } catch (e) {
+                    console.log('⚠️ Не удалось удалить обработчики MainButton:', e);
+                }
+            }
+        }
+    }
+    
+    // Отключаем сразу
+    forceHideMainButton();
+    
+    // Отключаем через интервалы
+    setTimeout(forceHideMainButton, 100);
+    setTimeout(forceHideMainButton, 500);
+    setTimeout(forceHideMainButton, 1000);
+    
+    // Отслеживаем попытки показать MainButton
+    const originalSetText = window.TelegramWebApp?.MainButton?.setText;
+    const originalShow = window.TelegramWebApp?.MainButton?.show;
+    
+    if (originalSetText) {
+        window.TelegramWebApp.MainButton.setText = function(text) {
+            console.log('⚠️ ЗАБЛОКИРОВАНА попытка установить текст MainButton:', text);
+            // Не выполняем оригинальную функцию
+        };
+    }
+    
+    if (originalShow) {
+        window.TelegramWebApp.MainButton.show = function() {
+            console.log('⚠️ ЗАБЛОКИРОВАНА попытка показать MainButton');
+            // Не выполняем оригинальную функцию
+        };
+    }
+    
+    console.log('✅ MainButton полностью заблокирована для question.html');
+});
+</script>
 <script>
 // API configuration
 const API_BASE_URL = window.location.origin;

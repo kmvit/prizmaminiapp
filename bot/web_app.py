@@ -322,18 +322,6 @@ async def api_info():
         }
     }
 
-# Временный endpoint для тестирования (убрать в продакшене)
-@app.post("/api/debug/complete-test/{telegram_id}", summary="[DEBUG] Принудительно завершить тест")
-async def debug_complete_test(telegram_id: int):
-    """Временный endpoint для тестирования - принудительно завершает тест пользователя"""
-    try:
-        result = await db_service.complete_test(telegram_id)
-        logger.info(f"🧪 [DEBUG] Тест принудительно завершен для пользователя {telegram_id}")
-        return {"status": "success", "message": f"Тест завершен для пользователя {telegram_id}", "result": result}
-    except Exception as e:
-        logger.error(f"🧪 [DEBUG] Ошибка завершения теста: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка завершения теста: {e}")
-
 @app.get("/api/download/report/{telegram_id}", summary="Скачать персональный отчет")
 async def download_personal_report(telegram_id: int, download: Optional[str] = None, method: Optional[str] = None, t: Optional[str] = None):
     """Генерировать и скачать персональный отчет пользователя"""
