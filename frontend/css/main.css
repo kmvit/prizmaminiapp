@@ -179,6 +179,15 @@ body{
     display: flex;
     position: relative;
     min-height: 67px;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    outline: none;
+    box-shadow: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
 }
 .button-triangle img{
     width: 100%;
