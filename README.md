@@ -90,8 +90,9 @@ nano .env  # или любой другой редактор
 
 #### Пример конфигурации .env:
 ```env
-# Perplexity API для ИИ-анализа ответов (ОБЯЗАТЕЛЬНО)
+# Perplexity API для ИИ-анализа ответов (ВРЕМЕННО ОТКЛЮЧЕНО)
 PERPLEXITY_API_KEY=your_perplexity_api_key_here
+PERPLEXITY_ENABLED=false
 
 # База данных
 DATABASE_URL=sqlite+aiosqlite:///./data/bot.db

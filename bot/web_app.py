@@ -6,8 +6,7 @@ from typing import Optional
 from datetime import datetime
 
 from bot.services.database_service import db_service
-from bot.services.perplexity import perplexity_service
-from bot.config import BASE_DIR
+from bot.config import BASE_DIR, PERPLEXITY_ENABLED
 from bot.models.api_models import (
     AnswerRequest, UserProfileUpdate, CurrentQuestionResponse, 
     NextQuestionResponse, UserProgressResponse, UserProfileResponse,
@@ -131,13 +130,19 @@ async def save_answer(telegram_id: int, answer_data: AnswerRequest):
             answer_type=answer_data.answer_type
         )
         
-        # Анализируем ответ через ИИ (асинхронно)
-        try:
-            analysis_result = await perplexity_service.analyze_text(answer_data.text_answer)
-            ai_analysis = analysis_result['choices'][0]['message']['content']
-            await db_service.update_answer_analysis(answer.id, ai_analysis)
-        except Exception as api_error:
-            logger.error(f"Perplexity API error: {api_error}")
+        # Анализируем ответ через ИИ (если включено)
+        if PERPLEXITY_ENABLED:
+            try:
+                from bot.services.perplexity import perplexity_service
+                analysis_result = await perplexity_service.analyze_text(answer_data.text_answer)
+                ai_analysis = analysis_result['choices'][0]['message']['content']
+                await db_service.update_answer_analysis(answer.id, ai_analysis)
+                logger.info(f"✅ ИИ-анализ выполнен для ответа {answer.id}")
+            except Exception as api_error:
+                logger.error(f"Perplexity API error: {api_error}")
+        else:
+            # Perplexity отключен - сохраняем ответ без анализа
+            logger.info(f"ℹ️ Perplexity отключен - ответ {answer.id} сохранен без ИИ-анализа")
         
         # Получаем следующий вопрос
         next_question = await db_service.get_next_question(
@@ -315,6 +320,11 @@ async def api_info():
         "name": "PRIZMA API",
         "version": "1.0.0",
         "description": "API для психологического тестирования с ИИ-анализом",
+        "features": {
+            "perplexity_ai": PERPLEXITY_ENABLED,
+            "pdf_generation": True,
+            "payments": True
+        },
         "endpoints": {
             "docs": "/docs",
             "redoc": "/redoc",

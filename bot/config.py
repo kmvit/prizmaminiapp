@@ -19,6 +19,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{DATABASE_DIR}/bo
 
 # Perplexity API
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+PERPLEXITY_ENABLED = os.getenv("PERPLEXITY_ENABLED", "false").lower() == "true"
 
 # Robokassa
 ROBOKASSA_LOGIN = os.getenv("ROBOKASSA_LOGIN")
@@ -30,7 +31,8 @@ class Settings(BaseSettings):
     # BOT_TOKEN: str  # Не нужен для веб-приложения
     WEBAPP_URL: str = "http://localhost:8080"
     DATABASE_URL: str
-    PERPLEXITY_API_KEY: str
+    PERPLEXITY_API_KEY: str = ""  # Делаем необязательным
+    PERPLEXITY_ENABLED: bool = False  # По умолчанию отключено
     ROBOKASSA_LOGIN: str
     ROBOKASSA_PASSWORD: str
     ROBOKASSA_PASSWORD2: str = "default_password2"
@@ -40,9 +42,13 @@ class Settings(BaseSettings):
         env_file = ".env"
         extra = "ignore"  # Игнорировать дополнительные поля
 
-# Создаем только если все переменные доступны
+# Создаем настройки (Perplexity необязателен)
 try:
     settings = Settings()
+    if not PERPLEXITY_ENABLED:
+        print("ℹ️ Perplexity API отключен")
+    else:
+        print("✅ Perplexity API включен")
 except Exception as e:
     print(f"⚠️ Не удалось загрузить настройки из pydantic: {e}")
     settings = None
