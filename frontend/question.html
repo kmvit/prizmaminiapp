@@ -36,7 +36,7 @@
             <img src="./images/micro-icon.svg" alt="">
         </button>
     </div>
-    <button class="button-triangle" id="nextButton" onclick="submitAnswer()">
+    <button class="button-triangle" id="nextButton" onclick="submitAnswer()" style="display: block;">
         <span>Следующий вопрос</span>
         <img src="./images/button-triangle.svg" alt="">
     </button>
@@ -51,54 +51,64 @@
 <script src="./js/jquery-ui.min.js"></script>
 <script src="js/main-telegram.js?v=1735027890"></script>
 <script>
-// Принудительное отключение Telegram MainButton для этой страницы
+// Принудительное отключение Telegram MainButton и управление HTML кнопкой
 $(document).ready(function() {
-    console.log('🔧 Принудительное отключение MainButton в question.html');
+    console.log('🔧 Инициализация логики кнопок в question.html');
     
-    // Многократная проверка и отключение
-    function forceHideMainButton() {
-        if (window.TelegramWebApp && window.TelegramWebApp.MainButton) {
-            window.TelegramWebApp.MainButton.hide();
-            console.log('🚫 MainButton принудительно скрыта');
-            
-            // Удаляем обработчики
-            if (window.TelegramWebApp.tg && window.TelegramWebApp.tg.MainButton) {
-                try {
-                    window.TelegramWebApp.tg.MainButton.offClick();
-                } catch (e) {
-                    console.log('⚠️ Не удалось удалить обработчики MainButton:', e);
+    // Проверяем, запущены ли мы в Telegram Web App
+    const isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+    console.log('📱 Запущено в Telegram Web App:', isInTelegram);
+    
+    if (isInTelegram) {
+        // В Telegram - скрываем HTML кнопку и используем MainButton
+        console.log('📱 Режим Telegram: скрываем HTML кнопку');
+        $('#nextButton').hide();
+        
+        // Показываем MainButton вместо HTML кнопки
+        function setupTelegramMainButton() {
+            if (window.TelegramWebApp && window.TelegramWebApp.MainButton) {
+                window.TelegramWebApp.MainButton.setText('Следующий вопрос');
+                window.TelegramWebApp.MainButton.show();
+                
+                // Регистрируем обработчик
+                window.TelegramWebApp.onEvent('mainButtonClicked', submitAnswer);
+                
+                console.log('✅ Telegram MainButton настроена для отправки ответов');
+            }
+        }
+        
+        // Настраиваем MainButton с задержкой (ждем инициализации)
+        setTimeout(setupTelegramMainButton, 500);
+        
+    } else {
+        // В обычном браузере - показываем HTML кнопку
+        console.log('🌐 Режим браузера: используем HTML кнопку');
+        $('#nextButton').show();
+        
+        // Блокируем MainButton если она случайно появится
+        function forceHideMainButton() {
+            if (window.TelegramWebApp && window.TelegramWebApp.MainButton) {
+                window.TelegramWebApp.MainButton.hide();
+                console.log('🚫 MainButton принудительно скрыта в браузерном режиме');
+                
+                // Удаляем обработчики
+                if (window.TelegramWebApp.tg && window.TelegramWebApp.tg.MainButton) {
+                    try {
+                        window.TelegramWebApp.tg.MainButton.offClick();
+                    } catch (e) {
+                        console.log('⚠️ Не удалось удалить обработчики MainButton:', e);
+                    }
                 }
             }
         }
+        
+        // Отключаем MainButton через интервалы
+        setTimeout(forceHideMainButton, 100);
+        setTimeout(forceHideMainButton, 500);
+        setTimeout(forceHideMainButton, 1000);
     }
     
-    // Отключаем сразу
-    forceHideMainButton();
-    
-    // Отключаем через интервалы
-    setTimeout(forceHideMainButton, 100);
-    setTimeout(forceHideMainButton, 500);
-    setTimeout(forceHideMainButton, 1000);
-    
-    // Отслеживаем попытки показать MainButton
-    const originalSetText = window.TelegramWebApp?.MainButton?.setText;
-    const originalShow = window.TelegramWebApp?.MainButton?.show;
-    
-    if (originalSetText) {
-        window.TelegramWebApp.MainButton.setText = function(text) {
-            console.log('⚠️ ЗАБЛОКИРОВАНА попытка установить текст MainButton:', text);
-            // Не выполняем оригинальную функцию
-        };
-    }
-    
-    if (originalShow) {
-        window.TelegramWebApp.MainButton.show = function() {
-            console.log('⚠️ ЗАБЛОКИРОВАНА попытка показать MainButton');
-            // Не выполняем оригинальную функцию
-        };
-    }
-    
-    console.log('✅ MainButton полностью заблокирована для question.html');
+    console.log('✅ Логика кнопок настроена для question.html');
 });
 </script>
 <script>

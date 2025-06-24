@@ -327,27 +327,8 @@ $(function() {
         // Показать кнопку назад
         window.TelegramWebApp.BackButton.show();
         
-        // ПРИНУДИТЕЛЬНО отключаем главную кнопку Telegram и все ее обработчики
-        console.log('🚫 Отключаем Telegram MainButton для страницы вопросов...');
-        
-        // Удаляем все обработчики событий MainButton
-        if (window.TelegramWebApp && window.TelegramWebApp.tg && window.TelegramWebApp.tg.MainButton) {
-            window.TelegramWebApp.tg.MainButton.offClick();
-        }
-        
-        // Скрываем кнопку
-        window.TelegramWebApp.MainButton.hide();
-        
-        // Дополнительная проверка через таймер
-        setTimeout(() => {
-            window.TelegramWebApp.MainButton.hide();
-            console.log('✅ MainButton дополнительно скрыта через таймер');
-        }, 100);
-        
-        setTimeout(() => {
-            window.TelegramWebApp.MainButton.hide();
-            console.log('✅ MainButton окончательно скрыта');
-        }, 500);
+        // Логика MainButton теперь управляется напрямую в question.html
+        console.log('ℹ️ Логика MainButton для страницы вопросов перенесена в question.html');
         
         const textarea = $('#questionArea');
         let currentTelegramId = null;
