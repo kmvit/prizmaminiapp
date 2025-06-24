@@ -322,43 +322,83 @@ async def api_info():
         }
     }
 
+# Временный endpoint для тестирования (убрать в продакшене)
+@app.post("/api/debug/complete-test/{telegram_id}", summary="[DEBUG] Принудительно завершить тест")
+async def debug_complete_test(telegram_id: int):
+    """Временный endpoint для тестирования - принудительно завершает тест пользователя"""
+    try:
+        result = await db_service.complete_test(telegram_id)
+        logger.info(f"🧪 [DEBUG] Тест принудительно завершен для пользователя {telegram_id}")
+        return {"status": "success", "message": f"Тест завершен для пользователя {telegram_id}", "result": result}
+    except Exception as e:
+        logger.error(f"🧪 [DEBUG] Ошибка завершения теста: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка завершения теста: {e}")
+
 @app.get("/api/download/report/{telegram_id}", summary="Скачать персональный отчет")
-async def download_personal_report(telegram_id: int):
+async def download_personal_report(telegram_id: int, download: Optional[str] = None, method: Optional[str] = None, t: Optional[str] = None):
     """Генерировать и скачать персональный отчет пользователя"""
     from fastapi.responses import FileResponse
+    from fastapi import Request
     from bot.services.report_generator import report_generator
     import os
     
     try:
+        logger.info(f"📁 Запрос скачивания отчета для пользователя {telegram_id}")
+        logger.info(f"📊 Параметры: download={download}, method={method}, t={t}")
+        
         # Проверяем, что пользователь завершил тест
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
         if not user.test_completed:
+            logger.warning(f"⚠️ Пользователь {telegram_id} не завершил тест")
             raise HTTPException(status_code=400, detail="Тест не завершен. Завершите тест для получения отчета.")
         
         # Получаем ответы пользователя
         answers = await db_service.get_user_answers(telegram_id)
         
         if not answers:
+            logger.warning(f"⚠️ У пользователя {telegram_id} нет ответов")
             raise HTTPException(status_code=400, detail="У пользователя нет ответов для генерации отчета.")
+        
+        logger.info(f"✅ Пользователь {telegram_id} прошел проверки, генерируем отчет...")
         
         # Генерируем персональный отчет
         report_path = await report_generator.generate_report(user, answers)
         
         if not os.path.exists(report_path):
+            logger.error(f"❌ Файл отчета не найден: {report_path}")
             raise HTTPException(status_code=500, detail="Ошибка при генерации отчета")
+        
+        logger.info(f"📄 Отчет готов: {report_path}, размер: {os.path.getsize(report_path)} байт")
+        
+        # Определяем заголовки для скачивания
+        headers = {}
+        
+        # Для принудительного скачивания (из Telegram Web App)
+        if download == "1":
+            headers["Content-Disposition"] = f'attachment; filename="prizma-report-{telegram_id}.pdf"'
+            headers["Content-Type"] = "application/pdf"
+            headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            headers["Pragma"] = "no-cache"
+            headers["Expires"] = "0"
+            logger.info("📱 Принудительное скачивание для Telegram Web App")
+        else:
+            # Обычное открытие в браузере
+            headers["Content-Disposition"] = f'inline; filename="prizma-report-{telegram_id}.pdf"'
+            logger.info("🌐 Обычное открытие в браузере")
         
         # Возвращаем файл для скачивания
         return FileResponse(
             path=report_path,
             media_type='application/pdf',
-            filename=f"prizma-report-{telegram_id}.pdf"
+            filename=f"prizma-report-{telegram_id}.pdf",
+            headers=headers
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generating/downloading report: {e}")
+        logger.error(f"❌ Error generating/downloading report: {e}")
         raise HTTPException(status_code=500, detail="Ошибка при генерации отчета")
 
 # Подключение статических файлов в конце (после всех API маршрутов)

@@ -134,6 +134,11 @@ async function submitAnswer() {
         return;
     }
     
+    // Тактильная обратная связь для Telegram
+    if (window.TelegramWebApp && window.TelegramWebApp.hapticFeedback) {
+        window.TelegramWebApp.hapticFeedback('medium');
+    }
+    
     // Показываем индикатор загрузки
     $('#loadingIndicator').show();
     $('#nextButton').prop('disabled', true);
@@ -159,6 +164,11 @@ async function submitAnswer() {
         const data = await response.json();
         
         if (response.ok) {
+            // Тактильная обратная связь при успехе
+            if (window.TelegramWebApp && window.TelegramWebApp.hapticFeedback) {
+                window.TelegramWebApp.hapticFeedback('success');
+            }
+            
             if (data.status === 'next_question') {
                 // Переходим к следующему вопросу
                 currentQuestionData = {
