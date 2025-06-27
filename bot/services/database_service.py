@@ -6,6 +6,7 @@ from datetime import datetime
 
 from bot.database.models import User, Question, Answer, Payment, Report, QuestionType, PaymentStatus
 from bot.database.database import async_session
+from bot.config import FREE_QUESTIONS_LIMIT
 
 class DatabaseService:
     
@@ -141,9 +142,9 @@ class DatabaseService:
                 Question.is_active == True
             ]
             
-            # Если пользователь не платный, показываем только бесплатные вопросы
+            # Если пользователь не платный, ограничиваем первыми N вопросами
             if not is_paid:
-                conditions.append(Question.type == QuestionType.FREE)
+                conditions.append(Question.order_number <= FREE_QUESTIONS_LIMIT)
             
             stmt = select(Question).where(and_(*conditions)).order_by(Question.order_number).limit(1)
             result = await session.execute(stmt)
@@ -151,16 +152,23 @@ class DatabaseService:
     
     async def get_total_questions(self, is_paid: bool) -> int:
         """Получить общее количество вопросов"""
+        if not is_paid:
+            return FREE_QUESTIONS_LIMIT
+            
         async with async_session() as session:
             conditions = [Question.is_active == True]
-            
-            if not is_paid:
-                conditions.append(Question.type == QuestionType.FREE)
             
             stmt = select(Question).where(and_(*conditions))
             result = await session.execute(stmt)
             questions = result.scalars().all()
             return len(questions)
+    
+    async def get_questions(self) -> List[Question]:
+        """Получить все активные вопросы"""
+        async with async_session() as session:
+            stmt = select(Question).where(Question.is_active == True).order_by(Question.order_number)
+            result = await session.execute(stmt)
+            return result.scalars().all()
     
     async def create_question(self, text: str, question_type: QuestionType, order_number: int) -> Question:
         """Создать новый вопрос"""

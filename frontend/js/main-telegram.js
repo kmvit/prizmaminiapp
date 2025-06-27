@@ -1,5 +1,87 @@
 'use strict';
 $(function() {
+    // ========================================
+    // УНИФИЦИРОВАННЫЕ УТИЛИТЫ (устраняют дублирование)
+    // ========================================
+    
+    // Получение Telegram ID пользователя
+    function getTelegramUserId() {
+        // Приоритет 1: initDataUnsafe (более надежный)
+        if (window.TelegramWebApp && window.TelegramWebApp.initDataUnsafe && window.TelegramWebApp.initDataUnsafe.user) {
+            return window.TelegramWebApp.initDataUnsafe.user.id;
+        }
+        // Приоритет 2: getUserId() метод
+        if (window.TelegramWebApp && window.TelegramWebApp.getUserId) {
+            return window.TelegramWebApp.getUserId();
+        }
+        // Для тестирования - используем фиксированный ID
+        const testId = localStorage.getItem('test_telegram_id');
+        if (testId) {
+            return parseInt(testId);
+        }
+        return 123456789;
+    }
+
+    // Проверка, работаем ли мы в Telegram Web App
+    function isInTelegramWebApp() {
+        return !!(window.Telegram && window.Telegram.WebApp) || 
+               !!(window.TelegramWebApp && window.TelegramWebApp.tg) ||
+               !!window.TelegramWebApp;
+    }
+
+    // Безопасная тактильная обратная связь
+    function safeHapticFeedback(type = 'light') {
+        try {
+            if (isInTelegramWebApp()) {
+                const api = getTelegramAPI();
+                if (api && api.hapticFeedback) {
+                    api.hapticFeedback(type);
+                } else if (api && api.HapticFeedback && api.HapticFeedback.impactOccurred) {
+                    api.HapticFeedback.impactOccurred(type);
+                }
+            }
+        } catch (error) {
+            console.log('⚠️ Не удалось вызвать тактильную обратную связь:', error);
+        }
+    }
+
+    // Безопасное отображение алерта
+    function safeShowAlert(message) {
+        try {
+            if (isInTelegramWebApp()) {
+                const api = getTelegramAPI();
+                if (api && api.showAlert) {
+                    api.showAlert(message);
+                    return;
+                }
+            }
+            // Fallback для браузера
+            alert(message);
+        } catch (error) {
+            console.error('❌ Ошибка отображения алерта:', error);
+            alert(message);
+        }
+    }
+
+    // Получение правильного Telegram API
+    function getTelegramAPI() {
+        if (window.Telegram && window.Telegram.WebApp) {
+            return window.Telegram.WebApp;
+        } else if (window.TelegramWebApp && window.TelegramWebApp.tg) {
+            return window.TelegramWebApp.tg;
+        } else if (window.TelegramWebApp) {
+            return window.TelegramWebApp;
+        }
+        return null;
+    }
+
+    // API configuration
+    const API_BASE_URL = window.location.origin;
+
+    // ========================================
+    // СУЩЕСТВУЮЩИЙ КОД ИЗ MAIN.JS
+    // ========================================
+
     // Существующий код из main.js
     const closedStyle = {
         borderRadius: "25px",
@@ -25,9 +107,7 @@ $(function() {
         $(".select-selected").css(isOpen ? closedStyle : openedStyle);
 
         // Тактильная обратная связь
-        if (window.TelegramWebApp) {
-            window.TelegramWebApp.hapticFeedback('light');
-        }
+        safeHapticFeedback('light');
     });
 
     $(".option").click(function() {
@@ -42,9 +122,7 @@ $(function() {
         $(".select-selected").css(closedStyle);
 
         // Тактильная обратная связь
-        if (window.TelegramWebApp) {
-            window.TelegramWebApp.hapticFeedback('medium');
-        }
+        safeHapticFeedback('medium');
     });
 
     $(document).click(function() {
@@ -149,11 +227,23 @@ $(function() {
         }
     }
 
-    // Запуск инициализации
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initTelegramApp);
-    } else {
+    // Запуск инициализации с защитой от двойного вызова
+    let appInitialized = false;
+    
+    function safeInitTelegramApp() {
+        if (appInitialized) {
+            console.log('⚠️ TelegramApp уже инициализирован, пропускаем повторную инициализацию');
+            return;
+        }
+        appInitialized = true;
+        console.log('🚀 Инициализируем TelegramApp (первый раз)');
         initTelegramApp();
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', safeInitTelegramApp);
+    } else {
+        safeInitTelegramApp();
     }
 
     function getCurrentPage() {
@@ -175,7 +265,7 @@ $(function() {
         // Обработка кнопки "Начать анализ"
         $('.button[href="steps.html"]').click(function(e) {
             e.preventDefault();
-            window.TelegramWebApp.hapticFeedback('medium');
+            safeHapticFeedback('medium');
             window.location.href = 'steps.html';
         });
     }
@@ -192,7 +282,7 @@ $(function() {
         
         // Добавить обработчики для кнопок шагов
         $('.button').click(function() {
-            window.TelegramWebApp.hapticFeedback('medium');
+            safeHapticFeedback('medium');
         });
     }
 
@@ -299,11 +389,7 @@ $(function() {
                 return true;
             } catch (error) {
                 console.error('Ошибка при сохранении профиля:', error);
-                if (window.TelegramWebApp && window.TelegramWebApp.showAlert) {
-                    window.TelegramWebApp.showAlert('Ошибка сохранения данных. Попробуйте еще раз.');
-                } else {
-                    alert('Ошибка сохранения данных. Попробуйте еще раз.');
-                }
+                safeShowAlert('Ошибка сохранения данных. Попробуйте еще раз.');
                 return false;
             }
         }
@@ -318,12 +404,12 @@ $(function() {
             const gender = $('#genderInput').val();
 
             if (!name || !age || !gender) {
-                window.TelegramWebApp.showAlert('Пожалуйста, заполните все поля');
+                safeShowAlert('Пожалуйста, заполните все поля');
                 return;
             }
 
             if (age < 1 || age > 120) {
-                window.TelegramWebApp.showAlert('Пожалуйста, введите корректный возраст');
+                safeShowAlert('Пожалуйста, введите корректный возраст');
                 return;
             }
 
@@ -405,15 +491,7 @@ $(function() {
         // Переменные для работы с API
         let currentTelegramId = null;
         let currentQuestionData = null;
-        const API_BASE_URL = window.location.origin;
         console.log('🌐 API_BASE_URL установлен в:', API_BASE_URL);
-        
-        // Получаем Telegram ID пользователя через унифицированный API
-        function getTelegramUserId() {
-            const userId = window.TelegramWebApp.getUserId();
-            console.log('👤 getTelegramUserId() вернул:', userId);
-            return userId;
-        }
         
         // Загрузка текущего вопроса
         async function loadCurrentQuestion() {
@@ -473,19 +551,20 @@ $(function() {
             const answerText = $('#questionArea').val().trim();
             
             if (!answerText) {
-                window.TelegramWebApp.showAlert('Пожалуйста, введите ответ на вопрос');
+                safeShowAlert('Пожалуйста, введите ответ на вопрос');
                 return;
             }
             
             if (!currentTelegramId) {
-                window.TelegramWebApp.showAlert('Ошибка: не удалось получить ID пользователя');
+                safeShowAlert('Ошибка: не удалось получить ID пользователя');
                 return;
             }
             
             // Тактильная обратная связь
-            window.TelegramWebApp.hapticFeedback('medium');
+            safeHapticFeedback('medium');
             
             try {
+                console.log('📤 Отправляем ответ на сервер...');
                 const response = await fetch(`${API_BASE_URL}/api/user/${currentTelegramId}/answer`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -495,18 +574,26 @@ $(function() {
                     })
                 });
                 
+                console.log('📥 Получен ответ сервера:', response.status, response.statusText);
                 const responseText = await response.text();
+                console.log('📄 Текст ответа:', responseText);
+                
                 let data;
                 try {
                     data = JSON.parse(responseText);
                 } catch (e) {
+                    console.error('❌ Ошибка парсинга JSON:', e);
+                    console.error('❌ Полученный текст:', responseText);
                     throw new Error('Сервер вернул некорректный JSON: ' + responseText);
                 }
                 
                 if (response.ok) {
-                    window.TelegramWebApp.hapticFeedback('light');
+                    safeHapticFeedback('light');
+                    
+                    console.log('✅ Ответ сервера получен:', data);
                     
                     if (data.status === 'next_question') {
+                        console.log('➡️ Переход к следующему вопросу:', data.next_question.order_number);
                         currentQuestionData = {
                             question: data.next_question,
                             progress: data.progress,
@@ -518,17 +605,22 @@ $(function() {
                         showSuccessMessage('Ответ сохранен!');
                         
                     } else if (data.status === 'test_completed') {
+                        console.log('🎉 Тест завершен! Перенаправляем на loading.html для генерации отчета');
                         const message = data.message || 'Тест завершен!';
-                        window.TelegramWebApp.showAlert(message);
+                        safeShowAlert(message);
                         setTimeout(() => {
-                            window.location.href = 'download.html';
+                            window.location.href = 'loading.html';
                         }, 1500);
+                        
+                    } else {
+                        console.warn('⚠️ Неизвестный статус ответа:', data.status);
                     }
                 } else {
-                    window.TelegramWebApp.handleError(data, 'Ошибка при сохранении ответа');
+                    console.error('❌ Ошибка ответа сервера:', response.status, data);
+                    safeShowAlert('Ошибка при сохранении ответа');
                 }
             } catch (error) {
-                window.TelegramWebApp.handleError(error, 'Ошибка при сохранении ответа');
+                safeShowAlert('Ошибка при сохранении ответа');
             }
         }
         
@@ -579,7 +671,7 @@ $(function() {
         
         // Обработка микрофона - транскрибация речи в текст  
         $('.micro-button').click(function() {
-            window.TelegramWebApp.hapticFeedback('medium');
+            safeHapticFeedback('medium');
             startVoiceTranscription();
         });
         
@@ -599,7 +691,7 @@ $(function() {
             // Сначала пробуем использовать нативные возможности Telegram
             if (window.TelegramWebApp && window.TelegramWebApp.platform !== 'unknown') {
                 // В Telegram всегда доступна клавиатура с микрофоном
-                window.TelegramWebApp.showAlert('Используйте кнопку микрофона на Вашей клавиатуре для голосового ввода');
+                safeShowAlert('Используйте кнопку микрофона на Вашей клавиатуре для голосового ввода');
                 
                 // Фокусируемся на поле ввода, чтобы появилась клавиатура с микрофоном
                 $('#questionArea').focus();
@@ -611,7 +703,7 @@ $(function() {
             
             // Fallback: проверяем поддержку речевого ввода в браузере
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                window.TelegramWebApp.showAlert('Речевой ввод не поддерживается в данном браузере');
+                safeShowAlert('Речевой ввод не поддерживается в данном браузере');
                 return;
             }
             
@@ -676,7 +768,7 @@ $(function() {
                         break;
                 }
                 
-                window.TelegramWebApp.showAlert(errorMessage);
+                safeShowAlert(errorMessage);
             };
             
             recognition.onend = function() {
@@ -690,7 +782,7 @@ $(function() {
             } catch (error) {
                 console.error('Ошибка запуска распознавания:', error);
                 stopTranscription();
-                window.TelegramWebApp.showAlert('Не удалось запустить распознавание речи');
+                safeShowAlert('Не удалось запустить распознавание речи');
             }
         }
         
@@ -763,42 +855,105 @@ $(function() {
     }
 
     function initLoadingPage() {
+        console.log('⏳ Инициализация страницы загрузки...');
+        
         // Скрыть все кнопки
-        window.TelegramWebApp.MainButton.hide();
-        window.TelegramWebApp.BackButton.hide();
+        safeMainButton('hide');
+        safeBackButton('hide');
 
-        // Получаем Telegram ID и генерируем отчет
-        const telegramId = window.TelegramWebApp.getUserId();
+        // Получаем Telegram ID
+        const telegramId = getTelegramUserId();
+        
+        if (!telegramId) {
+            console.error('❌ Не удалось получить Telegram ID');
+            safeShowAlert('Ошибка: не удалось получить ID пользователя');
+            window.location.href = 'index.html';
+            return;
+        }
 
-        // Проверяем статус пользователя и генерируем отчет
-        async function checkUserStatusAndGenerateReport() {
-            try {
-                // Получаем информацию о пользователе
-                const progressResponse = await fetch(`/api/user/${telegramId}/progress`);
-                const progressData = await progressResponse.json();
-                
-                if (progressResponse.ok && progressData.user.test_completed) {
-                    // Если тест завершен, переходим сразу к скачиванию
-                    setTimeout(() => {
-                        window.location.href = 'download.html';
-                    }, 3000);
-                } else {
-                    // Если тест не завершен (недостаточно ответов), переходим к тарифам
-                    setTimeout(() => {
-                        window.location.href = 'price.html';
-                    }, 3000);
-                }
-            } catch (error) {
-                console.error('Error checking user status:', error);
-                // В случае ошибки переходим к тарифам
-                setTimeout(() => {
-                    window.location.href = 'price.html';
-                }, 3000);
+        console.log('👤 Telegram ID:', telegramId);
+
+        // Функция для обновления статуса на странице
+        function updateLoadingStatus(message) {
+            const statusElement = document.getElementById('loading-status');
+            if (statusElement) {
+                statusElement.textContent = message;
             }
         }
 
-        // Запускаем проверку
-        checkUserStatusAndGenerateReport();
+        // Проверяем статус генерации отчета каждые 2 секунды
+        async function checkReportStatus() {
+            try {
+                console.log('🔍 Проверяем статус генерации отчета...');
+                const response = await fetch(`/api/user/${telegramId}/report-status`);
+                const data = await response.json();
+                
+                console.log('📊 Статус отчета:', data);
+                
+                if (data.status === 'ready') {
+                    console.log('✅ Отчет готов! Перенаправляем на download.html');
+                    updateLoadingStatus('Отчет готов! Переходим к скачиванию...');
+                    safeHapticFeedback('light');
+                    setTimeout(() => {
+                        window.location.href = 'download.html';
+                    }, 1000);
+                    return true; // Останавливаем проверку
+                    
+                } else if (data.status === 'generating') {
+                    console.log('⏳ Отчет генерируется, ждем...');
+                    updateLoadingStatus('Создаем персональный анализ...');
+                    return false; // Продолжаем проверку
+                    
+                } else if (data.status === 'test_not_completed') {
+                    console.log('⚠️ Тест не завершен, перенаправляем на price.html');
+                    updateLoadingStatus('Тест не завершен...');
+                    setTimeout(() => {
+                        window.location.href = 'price.html';
+                    }, 2000);
+                    return true; // Останавливаем проверку
+                    
+                } else if (data.status === 'error') {
+                    console.error('❌ Ошибка генерации отчета:', data.message);
+                    updateLoadingStatus('Ошибка генерации. Попробуем позже...');
+                    safeShowAlert('Ошибка при генерации отчета. Попробуйте позже.');
+                    setTimeout(() => {
+                        window.location.href = 'download.html'; // Все равно переходим на скачивание
+                    }, 3000);
+                    return true; // Останавливаем проверку
+                }
+                
+            } catch (error) {
+                console.error('❌ Ошибка проверки статуса отчета:', error);
+                updateLoadingStatus('Проблема с подключением...');
+                // После ошибки переходим на download.html
+                setTimeout(() => {
+                    window.location.href = 'download.html';
+                }, 3000);
+                return true; // Останавливаем проверку
+            }
+            
+            return false; // Продолжаем проверку
+        }
+
+        // Запускаем первую проверку
+        checkReportStatus().then(shouldStop => {
+            if (!shouldStop) {
+                // Если отчет еще генерируется, проверяем каждые 2 секунды
+                const checkInterval = setInterval(async () => {
+                    const shouldStop = await checkReportStatus();
+                    if (shouldStop) {
+                        clearInterval(checkInterval);
+                    }
+                }, 2000);
+                
+                // Максимальное время ожидания - 60 секунд
+                setTimeout(() => {
+                    clearInterval(checkInterval);
+                    console.log('⏰ Превышен лимит времени ожидания, переходим на download.html');
+                    window.location.href = 'download.html';
+                }, 60000);
+            }
+        });
     }
 
     function initAnswersPage() {
@@ -826,7 +981,7 @@ $(function() {
         // Обработка выбора тарифа
         $('.price-plan-action .button').click(async function(e) {
             e.preventDefault();
-            window.TelegramWebApp.hapticFeedback('medium');
+            safeHapticFeedback('medium');
             
             const planType = $(this).closest('.free-price-plan').length > 0 ? 'free' : 'paid';
             
@@ -842,17 +997,17 @@ $(function() {
                             window.location.href = 'download.html';
                         } else {
                             // Недостаточно ответов
-                            window.TelegramWebApp.showAlert(`Для бесплатного отчета нужно ответить на все 15 вопросов. Вы ответили на ${progressData.progress.answered}.`);
+                            safeShowAlert(`Для бесплатного отчета нужно ответить на все 10 вопросов. Вы ответили на ${progressData.progress.answered}.`);
                             setTimeout(() => {
                                 window.location.href = 'question.html';
                             }, 2000);
                         }
                     } else {
-                        window.TelegramWebApp.showAlert('Ошибка получения данных пользователя');
+                        safeShowAlert('Ошибка получения данных пользователя');
                     }
                 } catch (error) {
                     console.error('Error checking user progress:', error);
-                    window.TelegramWebApp.showAlert('Ошибка проверки прогресса');
+                    safeShowAlert('Ошибка проверки прогресса');
                 }
             } else {
                 // Платный план - к оплате
@@ -873,190 +1028,315 @@ $(function() {
 
         // Обработка успешной оплаты
         $('.button').click(function() {
-            window.TelegramWebApp.hapticFeedback('light');
+            safeHapticFeedback('light');
             window.location.href = 'answers.html';
         });
     }
 
     function initDownloadPage() {
-        // Получаем Telegram ID пользователя
-        const telegramId = window.TelegramWebApp.getUserId();
+        console.log('📁 Инициализация страницы скачивания...');
+        
+        // Проверяем, была ли уже инициализирована эта страница
+        if (window.downloadPageInitialized) {
+            console.log('⚠️ Страница скачивания уже инициализирована, пропускаем');
+            return;
+        }
+        window.downloadPageInitialized = true;
+        
+        // Флаг для предотвращения повторных вызовов
+        let isDownloading = false;
 
-        // Показать кнопку "Завершить"
-        window.TelegramWebApp.onEvent('mainButtonClicked', function() {
-            // Закрыть приложение
-            window.TelegramWebApp.close();
-        });
-        window.TelegramWebApp.MainButton.setText('Завершить');
-        window.TelegramWebApp.MainButton.show();
-
-        // Обработка скачивания отчета (УЛУЧШЕННАЯ ЛОГИКА для Telegram Web App)
-        $('.button-download.telegram-download').click(async function() {
-            window.TelegramWebApp.hapticFeedback('medium');
+        // Универсальное скачивание отчета (умный выбор метода)
+        async function downloadPersonalReport(fallback = false) {
+            // Защита от повторных вызовов
+            if (isDownloading) {
+                console.log('⚠️ Скачивание уже в процессе, игнорируем повторный вызов');
+                return;
+            }
             
-            console.log('🔽 Начинаем скачивание отчета...');
-            console.log('📊 Telegram ID:', telegramId);
-            console.log('🌐 Telegram Web App версия:', window.TelegramWebApp.version);
+            const telegramId = getTelegramUserId();
             
-            const reportUrl = `${window.location.origin}/api/download/report/${telegramId}`;
-            console.log('📁 URL отчета:', reportUrl);
+            if (!telegramId) {
+                const alertMsg = 'Ошибка: не удалось получить ID пользователя';
+                safeShowAlert(alertMsg);
+                return;
+            }
             
-            // Показываем индикатор загрузки
-            const $button = $(this);
-            const originalText = $button.find('span').text();
-            $button.find('span').text('Скачиваем...');
-            $button.prop('disabled', true);
+            isDownloading = true;
+            
+            console.log('📁 Начинаем скачивание отчета для пользователя:', telegramId);
+            console.log('🔧 Fallback режим:', fallback);
+            console.log('📱 В Telegram Web App:', isInTelegramWebApp());
+            
+            const $button = fallback ? $('#downloadReportFallback') : $('#downloadReport');
+            const $span = $button.find('.download-file-text span');
+            const originalText = $span.text();
             
             try {
-                // НОВЫЙ МЕТОД: Скачивание через fetch + blob для реального сохранения файла
-                console.log('📱 Используем оптимизированное скачивание для Telegram...');
+                // Показываем индикатор загрузки
+                $button.addClass('loading');
+                $span.text('Генерируем отчет...');
                 
-                // Делаем запрос на получение файла
-                const response = await fetch(reportUrl + '?download=1&source=telegram&t=' + Date.now());
+                // Тактильная обратная связь для Telegram
+                safeHapticFeedback('medium');
                 
-                if (!response.ok) {
-                    throw new Error(`Ошибка сервера: ${response.status} ${response.statusText}`);
-                }
+                const reportUrl = `${API_BASE_URL}/api/download/report/${telegramId}`;
                 
-                console.log('✅ Ответ получен, создаем blob...');
-                
-                // Создаем blob из ответа
-                const blob = await response.blob();
-                console.log('📄 Blob создан, размер:', blob.size, 'байт');
-                
-                // Проверяем, поддерживает ли Telegram Web App download API
-                if (window.TelegramWebApp.downloadFile && 
-                    window.TelegramWebApp.version && 
-                    parseFloat(window.TelegramWebApp.version) >= 7.0) {
+                if (isInTelegramWebApp() && !fallback) {
+                    // В Telegram Web App используем простую и надежную логику
+                    console.log('📱 Используем Telegram Web App API...');
                     
-                    console.log('📱 Пробуем нативный Telegram download API...');
+                    // Простой метод: openLink
+                    console.log('🔗 Используем Telegram openLink...');
+                    const downloadUrl = reportUrl + '?download=1&source=telegram&t=' + Date.now();
                     
-                    try {
-                        // Создаем временный URL для blob
-                        const blobUrl = window.URL.createObjectURL(blob);
+                    // Используем правильный API в зависимости от доступности
+                    const telegramAPI = getTelegramAPI();
+                    
+                    if (telegramAPI && telegramAPI.openLink) {
+                        console.log('🔗 Открываем через Telegram openLink:', downloadUrl);
+                        telegramAPI.openLink(downloadUrl);
                         
-                        window.TelegramWebApp.downloadFile({
-                            url: blobUrl,
-                            file_name: `prizma-report-${telegramId}.pdf`
-                        }, function(success) {
-                            console.log('📱 Результат нативного API:', success);
-                            window.URL.revokeObjectURL(blobUrl);
-                            
-                            if (success) {
-                                window.TelegramWebApp.hapticFeedback('light');
-                                window.TelegramWebApp.showAlert('✅ Отчет успешно скачан!\n\n📄 Найдите файл prizma-report-' + telegramId + '.pdf в загрузках вашего устройства.');
-                            } else {
-                                // Fallback к обычному методу
-                                downloadViaBlob(blob);
-                            }
-                        });
+                        $span.text('Отчет открыт!');
                         
-                        return; // Выходим, если нативный API запущен
+                        // Тактильная обратная связь
+                        safeHapticFeedback('light');
                         
-                    } catch (nativeError) {
-                        console.error('📱 Ошибка нативного API:', nativeError);
-                        // Продолжаем к fallback методу
+                        if (telegramAPI.showAlert) {
+                            telegramAPI.showAlert('📁 Отчет открыт в браузере!\n\n' +
+                                '💡 Браузер должен автоматически скачать файл.\n' +
+                                'Если этого не произошло - проверьте папку "Загрузки".\n\n' +
+                                '📄 Имя файла: prizma-report-' + telegramId + '.pdf');
+                        }
+                        
+                        // Показываем альтернативные кнопки через 3 секунды
+                        setTimeout(() => {
+                            $('#downloadReportFallback').fadeIn();
+                            setTimeout(() => {
+                                $('#downloadReportDirect').fadeIn();
+                            }, 2000);
+                        }, 3000);
+                        
+                        // ПРИНУДИТЕЛЬНО завершаем выполнение функции
+                        console.log('✅ Telegram openLink выполнен, завершаем функцию');
+                        return; // ВАЖНО: выходим из функции после успешного вызова
+                    } else {
+                        console.log('⚠️ openLink недоступен, переходим к fallback методу');
+                        // НЕ выбрасываем ошибку, просто продолжаем к fallback
                     }
                 }
                 
-                // Fallback: обычное скачивание через blob и ссылку
-                downloadViaBlob(blob);
+                // Fallback метод: обычное скачивание через fetch + blob
+                console.log('🌐 Используем обычное скачивание через fetch...');
                 
-                function downloadViaBlob(blob) {
-                    console.log('🔗 Используем fallback скачивание через blob...');
+                $span.text('Скачиваем файл...');
+                
+                const fetchUrl = reportUrl + (fallback ? '?download=1&method=fallback' : '?download=1&method=fetch') + '&t=' + Date.now();
+                const response = await fetch(fetchUrl);
+                
+                if (response.ok) {
+                    console.log('✅ Ответ получен, создаем blob...');
                     
-                    try {
-                        // Создаем ссылку для скачивания
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `prizma-report-${telegramId}.pdf`;
-                        a.style.display = 'none';
-                        document.body.appendChild(a);
-                        
-                        console.log('⬇️ Инициируем скачивание...');
-                        a.click();
-                        
-                        // Очистка
-                        setTimeout(() => {
-                            window.URL.revokeObjectURL(url);
-                            if (a.parentNode) {
-                                a.parentNode.removeChild(a);
-                            }
-                        }, 100);
-                        
-                        window.TelegramWebApp.hapticFeedback('light');
-                        window.TelegramWebApp.showAlert('📁 Отчет скачан!\n\n' +
-                            '💡 Найдите файл в загрузках вашего устройства:\n' +
-                            '📄 prizma-report-' + telegramId + '.pdf\n\n' +
-                            '❓ Если файл не появился, попробуйте:\n' +
-                            '1. Проверить папку "Загрузки"\n' +
-                            '2. Проверить уведомления о скачивании\n' +
-                            '3. Открыть приложение через браузер');
-                        
-                        console.log('✅ Скачивание завершено через blob');
-                        
-                    } catch (blobError) {
-                        console.error('🔗 Ошибка blob скачивания:', blobError);
-                        
-                        // Последний fallback - openLink
-                        const directUrl = reportUrl + '?download=1&fallback=1&t=' + Date.now();
-                        console.log('🌐 Последний fallback: openLink ->', directUrl);
-                        
-                        if (window.TelegramWebApp.openLink) {
-                            window.TelegramWebApp.openLink(directUrl);
-                            window.TelegramWebApp.showAlert('📁 Отчет открыт в браузере!\n\n' +
-                                '💡 В открывшемся браузере нажмите кнопку "Скачать" или используйте меню "Сохранить как..."\n\n' +
-                                '📄 Имя файла: prizma-report-' + telegramId + '.pdf');
-                        } else {
-                            throw new Error('Все методы скачивания недоступны');
+                    // Создаем blob из ответа
+                    const blob = await response.blob();
+                    console.log('📄 Blob создан, размер:', blob.size, 'байт');
+                    
+                    // Создаем ссылку для скачивания
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `prizma-report-${telegramId}.pdf`;
+                    a.style.display = 'none';
+                    document.body.appendChild(a);
+                    
+                    console.log('⬇️ Инициируем скачивание...');
+                    a.click();
+                    
+                    // Очистка
+                    setTimeout(() => {
+                        window.URL.revokeObjectURL(url);
+                        if (a.parentNode) {
+                            a.parentNode.removeChild(a);
                         }
+                    }, 100);
+                    
+                    // Успешное завершение
+                    $span.text('Отчет скачан!');
+                    
+                    safeHapticFeedback('light');
+                    
+                    console.log('✅ Скачивание завершено успешно');
+                    
+                } else {
+                    const errorData = await response.json();
+                    const errorMsg = 'Ошибка при скачивании: ' + (errorData.detail || 'Неизвестная ошибка');
+                    
+                    console.error('❌ Ошибка сервера:', errorData);
+                    
+                    safeShowAlert(errorMsg);
+                    
+                    // Показываем альтернативные кнопки при ошибке
+                    if (!fallback) {
+                        $('#downloadReportFallback').fadeIn();
+                        setTimeout(() => {
+                            $('#downloadReportDirect').fadeIn();
+                        }, 1000);
                     }
                 }
                 
             } catch (error) {
                 console.error('❌ Ошибка при скачивании отчета:', error);
                 
-                window.TelegramWebApp.showAlert('❌ Ошибка при скачивании отчета:\n\n' +
-                    error.message + '\n\n' +
-                    '💡 Попробуйте:\n' +
-                    '1. Перезагрузить страницу\n' +
-                    '2. Проверить интернет-соединение\n' +
-                    '3. Открыть приложение в браузере\n' +
-                    '4. Обратиться в поддержку');
+                const errorMsg = 'Ошибка при скачивании отчета: ' + error.message;
+                
+                safeShowAlert(errorMsg + '\n\nПопробуйте альтернативное скачивание или обновите страницу.');
+                
+                // Показываем альтернативные кнопки при ошибке
+                if (!fallback) {
+                    $('#downloadReportFallback').fadeIn();
+                    setTimeout(() => {
+                        $('#downloadReportDirect').fadeIn();
+                    }, 1000);
+                }
+                
             } finally {
                 // Восстанавливаем кнопку
+                $button.removeClass('loading');
                 setTimeout(() => {
-                    $button.find('span').text(originalText);
-                    $button.prop('disabled', false);
+                    $span.text(originalText);
                 }, 2000);
+                
+                // Сбрасываем флаг через небольшую задержку чтобы избежать случайных повторных кликов
+                setTimeout(() => {
+                    isDownloading = false;
+                }, 1000);
             }
-            
-            console.log('🔽 Завершили попытку скачивания отчета');
-        });
+        }
 
-        // Проверяем статус пользователя при загрузке страницы
-        async function checkUserStatus() {
+        // Привязываем обработчики к кнопкам скачивания
+        function setupDownloadHandlers() {
+            // ОЧИЩАЕМ старые обработчики чтобы избежать дублирования
+            $('#downloadReport').off('click');
+            $('#downloadReportFallback').off('click');
+            $('#downloadReportDirect').off('click');
+            
+            // Основная кнопка скачивания
+            $('#downloadReport').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation(); // Останавливаем всплытие события
+                e.stopImmediatePropagation(); // Останавливаем все обработчики
+                
+                if (isDownloading) {
+                    console.log('⚠️ Клик проигнорирован - скачивание уже в процессе');
+                    return false;
+                }
+                
+                console.log('🖱️ Клик по основной кнопке скачивания');
+                downloadPersonalReport(false); // Основной метод
+                return false;
+            });
+            
+            // Альтернативная кнопка скачивания
+            $('#downloadReportFallback').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation(); // Останавливаем всплытие события
+                e.stopImmediatePropagation(); // Останавливаем все обработчики
+                
+                if (isDownloading) {
+                    console.log('⚠️ Клик проигнорирован - скачивание уже в процессе');
+                    return false;
+                }
+                
+                console.log('🖱️ Клик по альтернативной кнопке скачивания');
+                downloadPersonalReport(true); // Fallback метод
+                return false;
+            });
+            
+            // Прямая ссылка для крайних случаев
+            $('#downloadReportDirect').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                const telegramId = getTelegramUserId();
+                const directUrl = `${API_BASE_URL}/api/download/report/${telegramId}?download=1&direct=1&t=${Date.now()}`;
+                
+                console.log('🖱️ Клик по прямой ссылке скачивания');
+                
+                // Используем правильный API
+                const telegramAPI = getTelegramAPI();
+                
+                if (isInTelegramWebApp() && telegramAPI && telegramAPI.openLink) {
+                    telegramAPI.openLink(directUrl);
+                    if (telegramAPI.showAlert) {
+                        telegramAPI.showAlert('📁 Файл открыт в браузере!\n\nИспользуйте меню браузера "Сохранить как..." для скачивания файла.');
+                    }
+                } else {
+                    window.open(directUrl, '_blank');
+                }
+            });
+        }
+
+        // Проверка статуса пользователя при загрузке
+        async function checkUserStatusOnLoad() {
+            const telegramId = getTelegramUserId();
+            
+            if (!telegramId) return;
+            
             try {
-                const response = await fetch(`/api/user/${telegramId}/progress`);
+                console.log('🔍 Проверяем статус пользователя при загрузке...');
+                const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/progress`);
                 const data = await response.json();
                 
                 if (response.ok) {
-                    // Обновляем информацию на странице если есть соответствующие элементы
-                    if ($('.answers-count').length) {
-                        $('.answers-count').text(data.progress.answered);
-                    }
+                    console.log('📊 Данные пользователя:', data);
                     
                     if (!data.user.test_completed) {
-                        // Если тест не завершен, показываем предупреждение
-                        window.TelegramWebApp.showAlert('Внимание: тест не завершен полностью');
+                        console.log('⚠️ Тест не завершен, перенаправляем...');
+                        
+                        safeShowAlert('⚠️ Тест не завершен!\n\nВернитесь к прохождению теста для получения отчета.');
+                        setTimeout(() => {
+                            window.location.href = 'question.html';
+                        }, 2000);
+                    } else {
+                        console.log('✅ Тест завершен, отчет доступен');
+                        
+                        // Обновляем информацию на странице если есть соответствующие элементы
+                        if ($('.answers-count').length) {
+                            $('.answers-count').text(data.progress.answered);
+                        }
                     }
+                } else {
+                    console.error('❌ Ошибка получения статуса:', data);
                 }
             } catch (error) {
-                console.error('Error checking user status:', error);
+                console.error('❌ Ошибка проверки статуса пользователя:', error);
             }
         }
+
+        // Показать кнопку "Завершить"
+        try {
+            if (window.TelegramWebApp.MainButton) {
+                window.TelegramWebApp.MainButton.onClick(function() {
+                    // Закрыть приложение
+                    window.TelegramWebApp.close();
+                });
+                window.TelegramWebApp.MainButton.setText('Завершить');
+                window.TelegramWebApp.MainButton.show();
+            }
+        } catch (error) {
+            console.log('❌ MainButton не поддерживается:', error);
+        }
+
+        // Инициализация обработчиков и проверки
+        setupDownloadHandlers();
+        checkUserStatusOnLoad();
         
-        checkUserStatus();
+        // Для тестирования - сохраняем тестовый ID
+        if (!localStorage.getItem('test_telegram_id')) {
+            localStorage.setItem('test_telegram_id', '123456789');
+        }
+        
+        console.log('📁 Страница скачивания инициализирована');
     }
 }); 

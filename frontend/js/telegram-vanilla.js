@@ -10,14 +10,21 @@
     script.onload = function() {
         window.TelegramWebApp = {
             tg: window.Telegram?.WebApp,
+            isBrowser: !window.Telegram || !window.Telegram.WebApp || window.Telegram.WebApp.platform === 'unknown',
             
             init: function() {
-                if (!this.tg) {
-                    console.warn('Telegram WebApp API не доступен');
+                console.log('🔍 Определение платформы...');
+                console.log('🌐 window.Telegram:', !!window.Telegram);
+                console.log('📱 this.tg:', !!this.tg);
+                console.log('🖥️ isBrowser:', this.isBrowser);
+                
+                if (!this.tg || this.isBrowser) {
+                    console.warn('📱 Telegram WebApp API не доступен или это браузер');
+                    console.log('🌐 Работаем в браузерном режиме');
                     return;
                 }
                 
-                // Инициализация Web App
+                // Инициализация Web App только в Telegram
                 this.tg.ready();
                 
                 // Настройка темы
@@ -134,11 +141,25 @@
             },
 
             showAlert: function(message) {
-                if (!this.tg) {
+                // В браузере всегда используем обычный alert
+                if (this.isBrowser) {
+                    console.log('🌐 Браузерный режим: используем alert');
                     alert(message);
                     return;
                 }
-                this.tg.showAlert(message);
+                
+                // В Telegram пытаемся использовать нативный API
+                try {
+                    if (this.tg && this.tg.showAlert && typeof this.tg.showAlert === 'function') {
+                        this.tg.showAlert(message);
+                    } else {
+                        console.log('📱 Telegram showAlert не поддерживается, fallback на alert');
+                        alert(message);
+                    }
+                } catch (error) {
+                    console.warn('📱 Fallback to browser alert:', error);
+                    alert(message);
+                }
             },
 
             showConfirm: function(message, callback) {
@@ -154,11 +175,20 @@
             },
 
             hapticFeedback: function(type) {
-                if (!this.tg || !this.tg.HapticFeedback) return;
-                // Используем только валидные параметры для исправления WebappHapticImpactStyleInvalid
-                const validTypes = ['light', 'medium', 'heavy'];
-                const validType = validTypes.includes(type) ? type : 'medium';
+                // В браузере тактильная обратная связь недоступна
+                if (this.isBrowser) {
+                    console.log('🌐 Браузерный режим: тактильная обратная связь не поддерживается');
+                    return;
+                }
+                
                 try {
+                    if (!this.tg || !this.tg.HapticFeedback || typeof this.tg.HapticFeedback.impactOccurred !== 'function') {
+                        console.log('📱 Тактильная обратная связь не поддерживается в этой версии Telegram');
+                        return;
+                    }
+                    // Используем только валидные параметры для исправления WebappHapticImpactStyleInvalid
+                    const validTypes = ['light', 'medium', 'heavy'];
+                    const validType = validTypes.includes(type) ? type : 'medium';
                     this.tg.HapticFeedback.impactOccurred(validType);
                 } catch (e) {
                     console.log('⚠️ Не удалось вызвать тактильную обратную связь:', e);
@@ -178,7 +208,14 @@
             handleError: function(error, defaultMessage = 'Произошла ошибка') {
                 console.error('API Error:', error);
                 const message = error?.message || error?.error || error?.detail || defaultMessage;
-                this.showAlert(message);
+                
+                // Безопасный вызов showAlert без падения
+                try {
+                    this.showAlert(message);
+                } catch (e) {
+                    console.error('Ошибка в showAlert, используем console.error:', e);
+                    console.error('Сообщение об ошибке:', message);
+                }
             },
 
             // Проверка доступности в Telegram среде  

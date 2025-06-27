@@ -89,7 +89,7 @@ async def get_current_question(telegram_id: int):
                 max_length=question.max_length
             ),
             progress=ProgressResponse(
-                current=answered_count + 1,
+                current=question.order_number,
                 total=total_questions,
                 answered=answered_count
             ),
@@ -110,10 +110,14 @@ async def get_current_question(telegram_id: int):
 async def save_answer(telegram_id: int, answer_data: AnswerRequest):
     """Сохранить ответ пользователя и перейти к следующему вопросу"""
     try:
+        logger.info(f"💬 Начало обработки ответа для пользователя {telegram_id}")
+        
         # Получаем пользователя
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        logger.info(f"👤 Пользователь: id={user.id}, is_paid={user.is_paid}, current_question_id={user.current_question_id}")
         
         if not user.current_question_id:
+            logger.error(f"❌ Нет активного вопроса для пользователя {telegram_id}")
             raise HTTPException(status_code=400, detail="No active question")
         
         # Получаем текущий вопрос
@@ -145,10 +149,12 @@ async def save_answer(telegram_id: int, answer_data: AnswerRequest):
             logger.info(f"ℹ️ Perplexity отключен - ответ {answer.id} сохранен без ИИ-анализа")
         
         # Получаем следующий вопрос
+        logger.info(f"🔍 Поиск следующего вопроса: current_order={current_question.order_number}, is_paid={user.is_paid}")
         next_question = await db_service.get_next_question(
             current_question.id,
             user.is_paid
         )
+        logger.info(f"🎯 Результат поиска: {next_question.order_number if next_question else 'None'}")
         
         if next_question:
             # Обновляем текущий вопрос пользователя
@@ -170,19 +176,26 @@ async def save_answer(telegram_id: int, answer_data: AnswerRequest):
                     max_length=next_question.max_length
                 ),
                 progress=ProgressResponse(
-                    current=answered_count + 1,
+                    current=next_question.order_number,
                     total=total_questions,
                     answered=answered_count
                 )
             )
         else:
             # Тест завершен
+            logger.info(f"✅ Завершение теста для пользователя {telegram_id} после вопроса {current_question.order_number}")
             await db_service.complete_test(telegram_id)
             
-            return NextQuestionResponse(
+            # Запускаем генерацию отчета в фоне
+            import asyncio
+            asyncio.create_task(generate_report_background(telegram_id))
+            
+            response_data = NextQuestionResponse(
                 status="test_completed",
                 message="Поздравляем! Вы завершили тест."
             )
+            logger.info(f"📤 Отправляем ответ клиенту: {response_data.model_dump()}")
+            return response_data
             
     except HTTPException:
         raise
@@ -332,13 +345,48 @@ async def api_info():
         }
     }
 
+@app.get("/api/user/{telegram_id}/report-status", summary="Проверить статус генерации отчета")
+async def check_report_status(telegram_id: int):
+    """Проверить готовность отчета пользователя"""
+    try:
+        # Проверяем, что пользователь завершил тест
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        if not user.test_completed:
+            return {"status": "test_not_completed", "message": "Тест не завершен"}
+        
+        # Ищем последний отчет пользователя
+        reports_dir = Path("reports")
+        pattern = f"prizma_report_{telegram_id}_*.pdf"
+        
+        import glob
+        report_files = glob.glob(str(reports_dir / pattern))
+        
+        if report_files:
+            # Сортируем по времени создания, берем последний
+            latest_report = max(report_files, key=lambda x: Path(x).stat().st_mtime)
+            
+            # Проверяем, что файл существует и не поврежден
+            if Path(latest_report).exists() and Path(latest_report).stat().st_size > 0:
+                return {
+                    "status": "ready", 
+                    "message": "Отчет готов к скачиванию",
+                    "report_file": latest_report
+                }
+        
+        # Отчет еще генерируется или не найден
+        return {"status": "generating", "message": "Отчет генерируется, пожалуйста подождите..."}
+        
+    except Exception as e:
+        logger.error(f"Error checking report status: {e}")
+        return {"status": "error", "message": "Ошибка при проверке статуса отчета"}
+
 @app.get("/api/download/report/{telegram_id}", summary="Скачать персональный отчет")
 async def download_personal_report(telegram_id: int, download: Optional[str] = None, method: Optional[str] = None, t: Optional[str] = None):
-    """Генерировать и скачать персональный отчет пользователя"""
+    """Скачать готовый персональный отчет пользователя"""
     from fastapi.responses import FileResponse
-    from fastapi import Request
-    from bot.services.report_generator import report_generator
     import os
+    import glob
     
     try:
         logger.info(f"📁 Запрос скачивания отчета для пользователя {telegram_id}")
@@ -351,23 +399,23 @@ async def download_personal_report(telegram_id: int, download: Optional[str] = N
             logger.warning(f"⚠️ Пользователь {telegram_id} не завершил тест")
             raise HTTPException(status_code=400, detail="Тест не завершен. Завершите тест для получения отчета.")
         
-        # Получаем ответы пользователя
-        answers = await db_service.get_user_answers(telegram_id)
+        # Ищем готовый отчет пользователя
+        reports_dir = Path("reports")
+        pattern = f"prizma_report_{telegram_id}_*.pdf"
+        report_files = glob.glob(str(reports_dir / pattern))
         
-        if not answers:
-            logger.warning(f"⚠️ У пользователя {telegram_id} нет ответов")
-            raise HTTPException(status_code=400, detail="У пользователя нет ответов для генерации отчета.")
+        if not report_files:
+            logger.warning(f"⚠️ Отчет для пользователя {telegram_id} не найден")
+            raise HTTPException(status_code=404, detail="Отчет не готов. Пожалуйста, подождите.")
         
-        logger.info(f"✅ Пользователь {telegram_id} прошел проверки, генерируем отчет...")
+        # Берем последний созданный отчет
+        latest_report = max(report_files, key=lambda x: Path(x).stat().st_mtime)
         
-        # Генерируем персональный отчет
-        report_path = await report_generator.generate_report(user, answers)
+        if not os.path.exists(latest_report):
+            logger.error(f"❌ Файл отчета не найден: {latest_report}")
+            raise HTTPException(status_code=500, detail="Файл отчета поврежден")
         
-        if not os.path.exists(report_path):
-            logger.error(f"❌ Файл отчета не найден: {report_path}")
-            raise HTTPException(status_code=500, detail="Ошибка при генерации отчета")
-        
-        logger.info(f"📄 Отчет готов: {report_path}, размер: {os.path.getsize(report_path)} байт")
+        logger.info(f"📄 Отдаем готовый отчет: {latest_report}, размер: {os.path.getsize(latest_report)} байт")
         
         # Определяем заголовки для скачивания
         headers = {}
@@ -387,7 +435,7 @@ async def download_personal_report(telegram_id: int, download: Optional[str] = N
         
         # Возвращаем файл для скачивания
         return FileResponse(
-            path=report_path,
+            path=latest_report,
             media_type='application/pdf',
             filename=f"prizma-report-{telegram_id}.pdf",
             headers=headers
@@ -396,8 +444,35 @@ async def download_personal_report(telegram_id: int, download: Optional[str] = N
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error generating/downloading report: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка при генерации отчета")
+        logger.error(f"❌ Error downloading report: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка при скачивании отчета")
+
+# Функция фоновой генерации отчета
+async def generate_report_background(telegram_id: int):
+    """Генерация отчета в фоновом режиме после завершения теста"""
+    try:
+        logger.info(f"🔄 Начинаем фоновую генерацию отчета для пользователя {telegram_id}")
+        
+        # Получаем пользователя
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        # Получаем ответы и вопросы
+        answers = await db_service.get_user_answers(telegram_id)
+        questions = await db_service.get_questions()
+        
+        # Генерируем отчет через AI сервис
+        from bot.services.perplexity import AIAnalysisService
+        ai_service = AIAnalysisService()
+        
+        result = await ai_service.generate_psychological_report(user, questions, answers)
+        
+        if result.get("success"):
+            logger.info(f"✅ Фоновая генерация отчета завершена успешно для пользователя {telegram_id}: {result['report_file']}")
+        else:
+            logger.error(f"❌ Ошибка фоновой генерации отчета для пользователя {telegram_id}: {result.get('error')}")
+            
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка фоновой генерации отчета для пользователя {telegram_id}: {e}")
 
 # Подключение статических файлов в конце (после всех API маршрутов)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
