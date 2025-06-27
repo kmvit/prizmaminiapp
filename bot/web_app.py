@@ -134,19 +134,9 @@ async def save_answer(telegram_id: int, answer_data: AnswerRequest):
             answer_type=answer_data.answer_type
         )
         
-        # Анализируем ответ через ИИ (если включено)
-        if PERPLEXITY_ENABLED:
-            try:
-                from bot.services.perplexity import perplexity_service
-                analysis_result = await perplexity_service.analyze_text(answer_data.text_answer)
-                ai_analysis = analysis_result['choices'][0]['message']['content']
-                await db_service.update_answer_analysis(answer.id, ai_analysis)
-                logger.info(f"✅ ИИ-анализ выполнен для ответа {answer.id}")
-            except Exception as api_error:
-                logger.error(f"Perplexity API error: {api_error}")
-        else:
-            # Perplexity отключен - сохраняем ответ без анализа
-            logger.info(f"ℹ️ Perplexity отключен - ответ {answer.id} сохранен без ИИ-анализа")
+        # Perplexity анализ интегрирован только в генерацию отчетов, не в сохранение ответов
+        # Сохраняем ответ без промежуточного анализа 
+        logger.info(f"ℹ️ Ответ {answer.id} сохранен (ИИ-анализ будет выполнен при генерации отчета)")
         
         # Получаем следующий вопрос
         logger.info(f"🔍 Поиск следующего вопроса: current_order={current_question.order_number}, is_paid={user.is_paid}")
@@ -186,13 +176,13 @@ async def save_answer(telegram_id: int, answer_data: AnswerRequest):
             logger.info(f"✅ Завершение теста для пользователя {telegram_id} после вопроса {current_question.order_number}")
             await db_service.complete_test(telegram_id)
             
-            # Запускаем генерацию отчета в фоне
-            import asyncio
-            asyncio.create_task(generate_report_background(telegram_id))
+            # НЕ запускаем генерацию отчета в фоне - это будет делаться на loading.html
+            # import asyncio
+            # asyncio.create_task(generate_report_background(telegram_id))
             
             response_data = NextQuestionResponse(
-                status="test_completed",
-                message="Поздравляем! Вы завершили тест."
+                status="redirect_to_loading",  # Изменили статус для перенаправления на loading.html
+                message="Поздравляем! Вы завершили тест. Генерируем персональный отчет..."
             )
             logger.info(f"📤 Отправляем ответ клиенту: {response_data.model_dump()}")
             return response_data
@@ -363,23 +353,56 @@ async def check_report_status(telegram_id: int):
         report_files = glob.glob(str(reports_dir / pattern))
         
         if report_files:
-            # Сортируем по времени создания, берем последний
-            latest_report = max(report_files, key=lambda x: Path(x).stat().st_mtime)
+            # Сортируем по timestamp в имени файла (более надежно чем st_mtime)
+            # Имя файла: prizma_report_{telegram_id}_{timestamp}.pdf
+            def extract_timestamp(filepath):
+                filename = Path(filepath).name
+                # Извлекаем timestamp из имени файла: prizma_report_123456789_20250627_082506.pdf
+                parts = filename.split('_')
+                if len(parts) >= 5:
+                    try:
+                        # Берем дату и время: parts[3] = '20250627', parts[4] = '082506.pdf'
+                        date_part = parts[3]
+                        time_part = parts[4].replace('.pdf', '').replace('.txt', '')
+                        timestamp_str = f"{date_part}_{time_part}"
+                        return timestamp_str
+                    except:
+                        return "00000000_000000"
+                return "00000000_000000"
+                
+            # Находим последний файл по timestamp
+            latest_report = max(report_files, key=extract_timestamp)
+            return {"status": "ready", "message": "Отчет готов к скачиванию", "report_path": latest_report}
+        else:
+            return {"status": "not_ready", "message": "Отчет еще не готов"}
             
-            # Проверяем, что файл существует и не поврежден
-            if Path(latest_report).exists() and Path(latest_report).stat().st_size > 0:
-                return {
-                    "status": "ready", 
-                    "message": "Отчет готов к скачиванию",
-                    "report_file": latest_report
-                }
-        
-        # Отчет еще генерируется или не найден
-        return {"status": "generating", "message": "Отчет генерируется, пожалуйста подождите..."}
-        
     except Exception as e:
         logger.error(f"Error checking report status: {e}")
         return {"status": "error", "message": "Ошибка при проверке статуса отчета"}
+
+@app.post("/api/user/{telegram_id}/generate-report", summary="Запустить генерацию отчета")
+async def start_report_generation(telegram_id: int):
+    """Запустить генерацию отчета пользователя"""
+    try:
+        # Проверяем, что пользователь завершил тест
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        if not user.test_completed:
+            return {"status": "error", "message": "Тест не завершен"}
+        
+        logger.info(f"🚀 Запускаем синхронную генерацию отчета для пользователя {telegram_id}")
+        
+        # Запускаем синхронную генерацию отчета
+        report_path = await generate_report_background(telegram_id)
+        
+        if report_path:
+            return {"status": "success", "message": "Отчет успешно сгенерирован", "report_path": report_path}
+        else:
+            return {"status": "error", "message": "Ошибка при генерации отчета"}
+            
+    except Exception as e:
+        logger.error(f"Error starting report generation: {e}")
+        return {"status": "error", "message": f"Ошибка при генерации отчета: {str(e)}"}
 
 @app.get("/api/download/report/{telegram_id}", summary="Скачать персональный отчет")
 async def download_personal_report(telegram_id: int, download: Optional[str] = None, method: Optional[str] = None, t: Optional[str] = None):
@@ -405,11 +428,48 @@ async def download_personal_report(telegram_id: int, download: Optional[str] = N
         report_files = glob.glob(str(reports_dir / pattern))
         
         if not report_files:
-            logger.warning(f"⚠️ Отчет для пользователя {telegram_id} не найден")
-            raise HTTPException(status_code=404, detail="Отчет не готов. Пожалуйста, подождите.")
+            logger.warning(f"⚠️ Отчет для пользователя {telegram_id} не найден, запускаем генерацию...")
+            
+            # Запускаем генерацию отчета и ждем завершения
+            try:
+                await generate_report_background(telegram_id)
+                
+                # Повторно ищем отчет после генерации
+                report_files = glob.glob(str(reports_dir / pattern))
+                if not report_files:
+                    logger.error(f"❌ Отчет не создался даже после генерации для пользователя {telegram_id}")
+                    raise HTTPException(status_code=500, detail="Ошибка создания отчета. Попробуйте позже.")
+                
+                logger.info(f"✅ Отчет успешно создан для пользователя {telegram_id}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка при генерации отчета для пользователя {telegram_id}: {e}")
+                raise HTTPException(status_code=500, detail="Ошибка создания отчета. Попробуйте позже.")
         
-        # Берем последний созданный отчет
-        latest_report = max(report_files, key=lambda x: Path(x).stat().st_mtime)
+        # Функция для извлечения timestamp из имени файла
+        def extract_timestamp(filepath):
+            filename = Path(filepath).name
+            # Извлекаем timestamp из имени файла: prizma_report_123456789_20250627_082506.pdf
+            parts = filename.split('_')
+            if len(parts) >= 5:
+                try:
+                    # Берем дату и время: parts[3] = '20250627', parts[4] = '082506.pdf'
+                    date_part = parts[3]
+                    time_part = parts[4].replace('.pdf', '').replace('.txt', '')
+                    timestamp_str = f"{date_part}_{time_part}"
+                    return timestamp_str
+                except:
+                    pass
+            # Если не удается извлечь timestamp, используем время модификации как fallback
+            return str(int(Path(filepath).stat().st_mtime))
+        
+        # Сортируем по timestamp (последний будет первым) и берем последний отчет
+        report_files.sort(key=extract_timestamp, reverse=True)
+        latest_report = report_files[0]
+        
+        logger.info(f"📋 Найдено отчетов: {len(report_files)}")
+        logger.info(f"📄 Выбран последний отчет: {latest_report}")
+        for i, report in enumerate(report_files[:3]):  # Показываем первые 3 для отладки
+            logger.info(f"   {i+1}. {Path(report).name} (timestamp: {extract_timestamp(report)})")
         
         if not os.path.exists(latest_report):
             logger.error(f"❌ Файл отчета не найден: {latest_report}")
@@ -467,12 +527,16 @@ async def generate_report_background(telegram_id: int):
         result = await ai_service.generate_psychological_report(user, questions, answers)
         
         if result.get("success"):
-            logger.info(f"✅ Фоновая генерация отчета завершена успешно для пользователя {telegram_id}: {result['report_file']}")
+            report_path = result['report_file']
+            logger.info(f"✅ Фоновая генерация отчета завершена успешно для пользователя {telegram_id}: {report_path}")
+            return report_path
         else:
             logger.error(f"❌ Ошибка фоновой генерации отчета для пользователя {telegram_id}: {result.get('error')}")
+            return None
             
     except Exception as e:
         logger.error(f"❌ Критическая ошибка фоновой генерации отчета для пользователя {telegram_id}: {e}")
+        return None
 
 # Подключение статических файлов в конце (после всех API маршрутов)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -548,17 +548,26 @@ $(function() {
         
         // Отправка ответа
         async function submitAnswer() {
+            console.log('🚀 =============================================================');
+            console.log('🚀 НАЧАЛО ОТПРАВКИ ОТВЕТА');
+            console.log('🚀 =============================================================');
+            
             const answerText = $('#questionArea').val().trim();
+            console.log('📝 Текст ответа:', answerText);
             
             if (!answerText) {
+                console.log('❌ Пустой ответ');
                 safeShowAlert('Пожалуйста, введите ответ на вопрос');
                 return;
             }
             
             if (!currentTelegramId) {
+                console.log('❌ Нет Telegram ID');
                 safeShowAlert('Ошибка: не удалось получить ID пользователя');
                 return;
             }
+            
+            console.log('👤 Telegram ID:', currentTelegramId);
             
             // Тактильная обратная связь
             safeHapticFeedback('medium');
@@ -604,22 +613,31 @@ $(function() {
                         $('#questionArea').val('');
                         showSuccessMessage('Ответ сохранен!');
                         
-                    } else if (data.status === 'test_completed') {
+                    } else if (data.status === 'redirect_to_loading') {
                         console.log('🎉 Тест завершен! Перенаправляем на loading.html для генерации отчета');
+                        console.log('📊 Полученные данные:', data);
+                        
                         const message = data.message || 'Тест завершен!';
+                        console.log('💬 Сообщение пользователю:', message);
+                        
+                        // Показываем сообщение пользователю
                         safeShowAlert(message);
-                        setTimeout(() => {
-                            window.location.href = 'loading.html';
-                        }, 1500);
+                        
+                        // Мгновенное перенаправление на loading.html
+                        console.log('🔄 Выполняем перенаправление на loading.html...');
+                        window.location.href = 'loading.html';
                         
                     } else {
                         console.warn('⚠️ Неизвестный статус ответа:', data.status);
+                        console.warn('📊 Полученные данные:', data);
                     }
                 } else {
                     console.error('❌ Ошибка ответа сервера:', response.status, data);
                     safeShowAlert('Ошибка при сохранении ответа');
                 }
             } catch (error) {
+                console.error('❌ Ошибка при отправке ответа:', error);
+                console.error('❌ Stack trace:', error.stack);
                 safeShowAlert('Ошибка при сохранении ответа');
             }
         }
@@ -855,7 +873,9 @@ $(function() {
     }
 
     function initLoadingPage() {
-        console.log('⏳ Инициализация страницы загрузки...');
+        console.log('⏳ =============================================================');
+        console.log('⏳ ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ ГЕНЕРАЦИИ ОТЧЕТА');
+        console.log('⏳ =============================================================');
         
         // Скрыть все кнопки
         safeMainButton('hide');
@@ -871,17 +891,66 @@ $(function() {
             return;
         }
 
-        console.log('👤 Telegram ID:', telegramId);
+        console.log('👤 Telegram ID для генерации:', telegramId);
 
         // Функция для обновления статуса на странице
         function updateLoadingStatus(message) {
             const statusElement = document.getElementById('loading-status');
             if (statusElement) {
                 statusElement.textContent = message;
+                console.log('📝 Статус обновлен:', message);
             }
         }
 
-        // Проверяем статус генерации отчета каждые 2 секунды
+        // Запускаем генерацию отчета сразу при загрузке страницы
+        async function startReportGeneration() {
+            try {
+                console.log('🚀 Запускаем генерацию отчета для пользователя:', telegramId);
+                updateLoadingStatus('Запускаем генерацию отчета...');
+                
+                const response = await fetch(`/api/user/${telegramId}/generate-report`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('📊 Результат запуска генерации:', data);
+                
+                if (data.status === 'success') {
+                    console.log('✅ Генерация отчета завершена успешно!');
+                    updateLoadingStatus('Отчет готов! Переходим к скачиванию...');
+                    safeHapticFeedback('light');
+                    setTimeout(() => {
+                        window.location.href = 'download.html';
+                    }, 1500);
+                    return true;
+                    
+                } else if (data.status === 'error') {
+                    console.error('❌ Ошибка генерации отчета:', data.message);
+                    updateLoadingStatus('Произошла ошибка при генерации отчета...');
+                    safeShowAlert('Ошибка при генерации отчета: ' + data.message);
+                    setTimeout(() => {
+                        window.location.href = 'download.html'; // Все равно переходим на скачивание
+                    }, 3000);
+                    return true;
+                }
+                
+            } catch (error) {
+                console.error('❌ Ошибка при запуске генерации отчета:', error);
+                updateLoadingStatus('Ошибка соединения...');
+                safeShowAlert('Ошибка при генерации отчета. Попробуем позже.');
+                setTimeout(() => {
+                    window.location.href = 'download.html';
+                }, 3000);
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Функция для проверки готовности отчета (fallback на случай если генерация идет долго)
         async function checkReportStatus() {
             try {
                 console.log('🔍 Проверяем статус генерации отчета...');
@@ -899,23 +968,22 @@ $(function() {
                     }, 1000);
                     return true; // Останавливаем проверку
                     
-                } else if (data.status === 'generating') {
-                    console.log('⏳ Отчет генерируется, ждем...');
-                    updateLoadingStatus('Создаем персональный анализ...');
+                } else if (data.status === 'not_ready') {
+                    console.log('⏳ Отчет еще генерируется, ждем...');
+                    updateLoadingStatus('Анализируем ваши ответы...');
                     return false; // Продолжаем проверку
                     
                 } else if (data.status === 'test_not_completed') {
-                    console.log('⚠️ Тест не завершен, перенаправляем на price.html');
+                    console.log('⚠️ Тест не завершен, перенаправляем на question.html');
                     updateLoadingStatus('Тест не завершен...');
                     setTimeout(() => {
-                        window.location.href = 'price.html';
+                        window.location.href = 'question.html';
                     }, 2000);
                     return true; // Останавливаем проверку
                     
                 } else if (data.status === 'error') {
-                    console.error('❌ Ошибка генерации отчета:', data.message);
-                    updateLoadingStatus('Ошибка генерации. Попробуем позже...');
-                    safeShowAlert('Ошибка при генерации отчета. Попробуйте позже.');
+                    console.error('❌ Ошибка статуса отчета:', data.message);
+                    updateLoadingStatus('Ошибка проверки статуса...');
                     setTimeout(() => {
                         window.location.href = 'download.html'; // Все равно переходим на скачивание
                     }, 3000);
@@ -925,7 +993,6 @@ $(function() {
             } catch (error) {
                 console.error('❌ Ошибка проверки статуса отчета:', error);
                 updateLoadingStatus('Проблема с подключением...');
-                // После ошибки переходим на download.html
                 setTimeout(() => {
                     window.location.href = 'download.html';
                 }, 3000);
@@ -935,25 +1002,34 @@ $(function() {
             return false; // Продолжаем проверку
         }
 
-        // Запускаем первую проверку
-        checkReportStatus().then(shouldStop => {
-            if (!shouldStop) {
-                // Если отчет еще генерируется, проверяем каждые 2 секунды
+        // Запускаем генерацию отчета
+        console.log('🎬 Запускаем процесс генерации отчета...');
+        updateLoadingStatus('Подготавливаем анализ...');
+        
+        startReportGeneration().then(generationCompleted => {
+            if (!generationCompleted) {
+                // Если генерация не завершилась сразу, начинаем проверять статус
+                console.log('⏰ Генерация не завершилась мгновенно, запускаем проверку статуса...');
+                updateLoadingStatus('Генерируем персональный анализ...');
+                
                 const checkInterval = setInterval(async () => {
                     const shouldStop = await checkReportStatus();
                     if (shouldStop) {
                         clearInterval(checkInterval);
                     }
-                }, 2000);
+                }, 3000); // Проверяем каждые 3 секунды
                 
-                // Максимальное время ожидания - 60 секунд
+                // Максимальное время ожидания - 90 секунд
                 setTimeout(() => {
                     clearInterval(checkInterval);
                     console.log('⏰ Превышен лимит времени ожидания, переходим на download.html');
+                    updateLoadingStatus('Завершаем обработку...');
                     window.location.href = 'download.html';
-                }, 60000);
+                }, 90000);
             }
         });
+        
+        console.log('🎯 ============ ИНИЦИАЛИЗАЦИЯ LOADING ЗАВЕРШЕНА ============');
     }
 
     function initAnswersPage() {
