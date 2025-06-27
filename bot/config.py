@@ -22,6 +22,7 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "llama-3.1-sonar-small-128k-online")
 PERPLEXITY_ENABLED = os.getenv("PERPLEXITY_ENABLED", "false").lower() == "true"
 
+
 # Robokassa
 ROBOKASSA_LOGIN = os.getenv("ROBOKASSA_LOGIN")
 ROBOKASSA_PASSWORD = os.getenv("ROBOKASSA_PASSWORD")
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
     PERPLEXITY_API_KEY: str = ""  # Делаем необязательным
     PERPLEXITY_MODEL: str = "llama-3.1-sonar-small-128k-online"  # Модель по умолчанию
     PERPLEXITY_ENABLED: bool = False  # По умолчанию отключено
+
     ROBOKASSA_LOGIN: str
     ROBOKASSA_PASSWORD: str
     ROBOKASSA_PASSWORD2: str = "default_password2"
