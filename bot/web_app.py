@@ -538,5 +538,200 @@ async def generate_report_background(telegram_id: int):
         logger.error(f"❌ Критическая ошибка фоновой генерации отчета для пользователя {telegram_id}: {e}")
         return None
 
+# ПЛАТНАЯ ВЕРСИЯ - новые эндпоинты
+
+@app.get("/api/user/{telegram_id}/premium-report-status", summary="Проверить статус генерации платного отчета")
+async def check_premium_report_status(telegram_id: int):
+    """Проверить статус готовности платного отчета пользователя"""
+    try:
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        if not user.test_completed:
+            return {"status": "test_not_completed", "message": "Тест не завершен"}
+        
+        # Ищем последний платный отчет пользователя
+        reports_dir = Path("reports")
+        pattern = f"prizma_premium_report_{telegram_id}_*.pdf"
+        
+        import glob
+        report_files = glob.glob(str(reports_dir / pattern))
+        
+        if report_files:
+            # Сортируем по timestamp в имени файла
+            def extract_timestamp(filepath):
+                filename = Path(filepath).name
+                parts = filename.split('_')
+                if len(parts) >= 5:
+                    try:
+                        date_part = parts[3]
+                        time_part = parts[4].replace('.pdf', '').replace('.txt', '')
+                        timestamp_str = f"{date_part}_{time_part}"
+                        return timestamp_str
+                    except:
+                        return "00000000_000000"
+                return "00000000_000000"
+                
+            latest_report = max(report_files, key=extract_timestamp)
+            return {"status": "ready", "message": "Платный отчет готов к скачиванию", "report_path": latest_report}
+        else:
+            return {"status": "not_ready", "message": "Платный отчет еще не готов"}
+            
+    except Exception as e:
+        logger.error(f"Error checking premium report status: {e}")
+        return {"status": "error", "message": "Ошибка при проверке статуса платного отчета"}
+
+@app.post("/api/user/{telegram_id}/generate-premium-report", summary="Запустить генерацию платного отчета")
+async def start_premium_report_generation(telegram_id: int):
+    """Запустить генерацию платного отчета пользователя (50 вопросов)"""
+    try:
+        # Проверяем, что пользователь завершил тест
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        if not user.test_completed:
+            return {"status": "error", "message": "Тест не завершен"}
+        
+        logger.info(f"🚀 Запускаем синхронную генерацию ПЛАТНОГО отчета для пользователя {telegram_id}")
+        
+        # Запускаем синхронную генерацию платного отчета
+        report_path = await generate_premium_report_background(telegram_id)
+        
+        if report_path:
+            return {"status": "success", "message": "Платный отчет успешно сгенерирован", "report_path": report_path}
+        else:
+            return {"status": "error", "message": "Ошибка при генерации платного отчета"}
+            
+    except Exception as e:
+        logger.error(f"Error starting premium report generation: {e}")
+        return {"status": "error", "message": f"Ошибка при генерации платного отчета: {str(e)}"}
+
+@app.get("/api/download/premium-report/{telegram_id}", summary="Скачать платный персональный отчет")
+async def download_premium_personal_report(telegram_id: int, download: Optional[str] = None, method: Optional[str] = None, t: Optional[str] = None):
+    """Скачать готовый платный персональный отчет пользователя (50 вопросов)"""
+    from fastapi.responses import FileResponse
+    import os
+    import glob
+    
+    try:
+        logger.info(f"📁 Запрос скачивания ПЛАТНОГО отчета для пользователя {telegram_id}")
+        logger.info(f"📊 Параметры: download={download}, method={method}, t={t}")
+        
+        # Проверяем, что пользователь завершил тест
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        if not user.test_completed:
+            logger.warning(f"⚠️ Пользователь {telegram_id} не завершил тест")
+            raise HTTPException(status_code=400, detail="Тест не завершен. Завершите тест для получения платного отчета.")
+        
+        # Ищем готовый платный отчет пользователя
+        reports_dir = Path("reports")
+        pattern = f"prizma_premium_report_{telegram_id}_*.pdf"
+        report_files = glob.glob(str(reports_dir / pattern))
+        
+        if not report_files:
+            logger.warning(f"⚠️ Платный отчет для пользователя {telegram_id} не найден, запускаем генерацию...")
+            
+            # Запускаем генерацию платного отчета и ждем завершения
+            try:
+                await generate_premium_report_background(telegram_id)
+                
+                # Повторно ищем отчет после генерации
+                report_files = glob.glob(str(reports_dir / pattern))
+                if not report_files:
+                    logger.error(f"❌ Платный отчет не создался даже после генерации для пользователя {telegram_id}")
+                    raise HTTPException(status_code=500, detail="Ошибка создания платного отчета. Попробуйте позже.")
+                
+                logger.info(f"✅ Платный отчет успешно создан для пользователя {telegram_id}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка при генерации платного отчета для пользователя {telegram_id}: {e}")
+                raise HTTPException(status_code=500, detail="Ошибка создания платного отчета. Попробуйте позже.")
+        
+        # Функция для извлечения timestamp из имени файла
+        def extract_timestamp(filepath):
+            filename = Path(filepath).name
+            parts = filename.split('_')
+            if len(parts) >= 5:
+                try:
+                    date_part = parts[3]
+                    time_part = parts[4].replace('.pdf', '').replace('.txt', '')
+                    timestamp_str = f"{date_part}_{time_part}"
+                    return timestamp_str
+                except:
+                    pass
+            return str(int(Path(filepath).stat().st_mtime))
+        
+        # Сортируем по timestamp и берем последний отчет
+        report_files.sort(key=extract_timestamp, reverse=True)
+        latest_report = report_files[0]
+        
+        logger.info(f"📋 Найдено платных отчетов: {len(report_files)}")
+        logger.info(f"📄 Выбран последний платный отчет: {latest_report}")
+        
+        if not os.path.exists(latest_report):
+            logger.error(f"❌ Файл платного отчета не найден: {latest_report}")
+            raise HTTPException(status_code=500, detail="Файл платного отчета поврежден")
+        
+        logger.info(f"📄 Отдаем готовый платный отчет: {latest_report}, размер: {os.path.getsize(latest_report)} байт")
+        
+        # Определяем заголовки для скачивания
+        headers = {}
+        
+        # Для принудительного скачивания (из Telegram Web App)
+        if download == "1":
+            headers["Content-Disposition"] = f'attachment; filename="prizma-premium-report-{telegram_id}.pdf"'
+            headers["Content-Type"] = "application/pdf"
+            headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            headers["Pragma"] = "no-cache"
+            headers["Expires"] = "0"
+            logger.info("📱 Принудительное скачивание платного отчета для Telegram Web App")
+        else:
+            # Обычное открытие в браузере
+            headers["Content-Disposition"] = f'inline; filename="prizma-premium-report-{telegram_id}.pdf"'
+            logger.info("🌐 Обычное открытие платного отчета в браузере")
+        
+        # Возвращаем файл для скачивания
+        return FileResponse(
+            path=latest_report,
+            media_type='application/pdf',
+            filename=f"prizma-premium-report-{telegram_id}.pdf",
+            headers=headers
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error downloading premium report: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка при скачивании платного отчета")
+
+# Функция фоновой генерации платного отчета
+async def generate_premium_report_background(telegram_id: int):
+    """Генерация платного отчета в фоновом режиме после завершения теста (50 вопросов)"""
+    try:
+        logger.info(f"🔄 Начинаем фоновую генерацию ПЛАТНОГО отчета для пользователя {telegram_id}")
+        
+        # Получаем пользователя
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        # Получаем ответы и вопросы
+        answers = await db_service.get_user_answers(telegram_id)
+        questions = await db_service.get_questions()
+        
+        # Генерируем платный отчет через AI сервис
+        from bot.services.perplexity import AIAnalysisService
+        ai_service = AIAnalysisService()
+        
+        result = await ai_service.generate_premium_report(user, questions, answers)
+        
+        if result.get("success"):
+            report_path = result['report_file']
+            logger.info(f"✅ Фоновая генерация ПЛАТНОГО отчета завершена успешно для пользователя {telegram_id}: {report_path}")
+            return report_path
+        else:
+            logger.error(f"❌ Ошибка фоновой генерации ПЛАТНОГО отчета для пользователя {telegram_id}: {result.get('error')}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка фоновой генерации ПЛАТНОГО отчета для пользователя {telegram_id}: {e}")
+        return None
+
 # Подключение статических файлов в конце (после всех API маршрутов)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

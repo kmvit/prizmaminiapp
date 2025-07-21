@@ -19,7 +19,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{DATABASE_DIR}/bo
 
 # Perplexity API
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
-PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "llama-3.1-sonar-small-128k-online")
+PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "sonar-pro")
 PERPLEXITY_ENABLED = os.getenv("PERPLEXITY_ENABLED", "false").lower() == "true"
 
 
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     WEBAPP_URL: str = "http://localhost:8080"
     DATABASE_URL: str
     PERPLEXITY_API_KEY: str = ""  # Делаем необязательным
-    PERPLEXITY_MODEL: str = "llama-3.1-sonar-small-128k-online"  # Модель по умолчанию
+    PERPLEXITY_MODEL: str = "sonar"  # Модель по умолчанию
     PERPLEXITY_ENABLED: bool = False  # По умолчанию отключено
 
     ROBOKASSA_LOGIN: str
