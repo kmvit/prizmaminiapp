@@ -1066,6 +1066,26 @@ body{
     }
 }
 
+.footer-index {
+    margin-top: 32px;
+    text-align: center;
+    font-size: 15px;
+    color: #888;
+}
+.footer-link {
+    color: #888;
+    text-decoration: underline;
+    margin: 0 8px;
+    transition: color 0.2s;
+}
+.footer-link:hover {
+    color: #222;
+}
+.footer-separator {
+    color: #bbb;
+    margin: 0 4px;
+}
+
 
 
 
