@@ -41,9 +41,9 @@ class Settings(BaseSettings):
     PERPLEXITY_ENABLED: bool = False  # По умолчанию отключено
 
     ROBOKASSA_LOGIN: str
-    ROBOKASSA_PASSWORD: str
-    ROBOKASSA_PASSWORD2: str = "default_password2"
-    ROBOKASSA_TEST: str = "1"
+    ROBOKASSA_PASSWORD_1: str
+    ROBOKASSA_PASSWORD_TEST: str = "default_password2"
+    ROBOKASSA_TEST: bool = True # Было str, меняю на bool и устанавливаю True для тестовых платежей
     FREE_QUESTIONS_LIMIT: int = 10  # Количество бесплатных вопросов
 
     class Config:
@@ -52,7 +52,12 @@ class Settings(BaseSettings):
 
 # Создаем настройки (Perplexity необязателен)
 try:
-    settings = Settings()
+    settings = Settings(
+        ROBOKASSA_LOGIN=os.getenv("ROBOKASSA_LOGIN"),
+        ROBOKASSA_PASSWORD_1=os.getenv("ROBOKASSA_PASSWORD_1"),
+        ROBOKASSA_PASSWORD_TEST=os.getenv("ROBOKASSA_PASSWORD_TEST"),
+        ROBOKASSA_TEST=os.getenv("ROBOKASSA_TEST", "True").lower() == "true"
+    )
     if not PERPLEXITY_ENABLED:
         print("ℹ️ Perplexity API отключен")
     else:

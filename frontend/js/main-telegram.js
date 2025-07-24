@@ -1052,10 +1052,60 @@ $(function() {
         }
 
         // Получаем Telegram ID пользователя
-        const telegramId = window.TelegramWebApp.getUserId();
+        const telegramId = getTelegramUserId();
 
-        // Обработка выбора тарифа
-        $('.price-plan-action .button').click(async function(e) {
+        // Обработка кнопки "Выбрать способ оплаты" для премиум отчета
+        $('#startPremiumPayment').off('click').on('click', async function(e) {
+            e.preventDefault();
+            safeHapticFeedback('medium');
+
+            const $button = $(this);
+            const originalText = $button.html();
+
+            try {
+                $button.prop('disabled', true).html('Загрузка...');
+
+                const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/start-premium-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    console.log('✅ Платежная ссылка получена:', data.payment_link);
+                    safeHapticFeedback('light');
+                    // Перенаправляем пользователя на платежную страницу
+                    if (isInTelegramWebApp() && getTelegramAPI()?.openLink) {
+                        getTelegramAPI().openLink(data.payment_link);
+                        safeShowAlert('Открываем страницу оплаты. После оплаты вернитесь в это окно для получения отчета.');
+                    } else {
+                        window.location.href = data.payment_link;
+                    }
+                } else if (data.status === 'already_paid') {
+                    safeShowAlert(data.message);
+                    // Возможно, сразу перенаправить на страницу загрузки/скачивания отчета
+                    window.location.href = 'download.html'; 
+                } else {
+                    console.error('❌ Ошибка при получении платежной ссылки:', data.message || data.error);
+                    safeShowAlert('Не удалось сгенерировать ссылку на оплату: ' + (data.message || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('❌ Ошибка инициации платежа:', error);
+                safeShowAlert('Произошла ошибка при инициации платежа. Попробуйте позже.');
+            } finally {
+                $button.prop('disabled', false).html(originalText);
+            }
+        });
+
+        // Старый обработчик выбора тарифа (возможно, его уже нет или он не нужен)
+        // В данном случае, кнопки бесплатной и платной расшифровки на price.html уже обработаны
+        // <div class="price-plan-action">✓ Уже получена</div> для бесплатного тарифа
+        // <button id="startPremiumPayment"> для платного тарифа
+        // Поэтому этот блок кода может быть удален или переработан, если есть другие элементы с классом price-plan-action .button
+        $('.price-plan-action .button').off('click').on('click', async function(e) {
             e.preventDefault();
             safeHapticFeedback('medium');
             
@@ -1064,16 +1114,18 @@ $(function() {
             if (planType === 'free') {
                 // Бесплатный план - проверяем количество ответов
                 try {
-                    const progressResponse = await fetch(`/api/user/${telegramId}/progress`);
+                    const progressResponse = await fetch(`${API_BASE_URL}/api/user/${telegramId}/progress`);
                     const progressData = await progressResponse.json();
                     
                     if (progressResponse.ok) {
-                        if (progressData.progress.answered >= 15) {
+                        // FREE_QUESTIONS_LIMIT установлен в config.py (10 вопросов). В памяти был 15.
+                        // Используем FREE_QUESTIONS_LIMIT для проверки, т.к. бэкенд отдает его
+                        if (progressData.progress.answered >= progressData.progress.free_questions_limit) {
                             // Достаточно ответов для бесплатного отчета
                             window.location.href = 'download.html';
                         } else {
                             // Недостаточно ответов
-                            safeShowAlert(`Для бесплатного отчета нужно ответить на все 10 вопросов. Вы ответили на ${progressData.progress.answered}.`);
+                            safeShowAlert(`Для бесплатного отчета нужно ответить на все ${progressData.progress.free_questions_limit} вопросов. Вы ответили на ${progressData.progress.answered}.`);
                             setTimeout(() => {
                                 window.location.href = 'question.html';
                             }, 2000);
@@ -1085,10 +1137,11 @@ $(function() {
                     console.error('Error checking user progress:', error);
                     safeShowAlert('Ошибка проверки прогресса');
                 }
-            } else {
-                // Платный план - к оплате
-                window.location.href = 'complete-payment.html';
-            }
+            } 
+            // else if (planType === 'paid') {
+            //     // Этот блок заменяется новым обработчиком кнопки #startPremiumPayment
+            //     // window.location.href = 'complete-payment.html';
+            // }
         });
     }
 

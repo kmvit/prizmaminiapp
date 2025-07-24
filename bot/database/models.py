@@ -33,6 +33,7 @@ class User(Base):
     
     # Статусы и настройки
     is_paid = Column(Boolean, default=False)
+    is_premium_paid = Column(Boolean, default=False) # Добавляем новое поле для оплаты премиум отчета
     is_active = Column(Boolean, default=True)
     current_question_id = Column(Integer, ForeignKey("questions.id"), nullable=True)
     test_completed = Column(Boolean, default=False)

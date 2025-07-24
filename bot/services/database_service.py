@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
 from sqlalchemy.orm import selectinload
 from datetime import datetime
+import decimal
 
 from bot.database.models import User, Question, Answer, Payment, Report, QuestionType, PaymentStatus
 from bot.database.database import async_session
@@ -109,6 +110,19 @@ class DatabaseService:
             await session.commit()
             return user
     
+    async def update_user_premium_status(self, telegram_id: int, is_premium_paid: bool) -> User:
+        """Обновить статус is_premium_paid пользователя"""
+        async with async_session() as session:
+            stmt = select(User).where(User.telegram_id == telegram_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one()
+            
+            user.is_premium_paid = is_premium_paid
+            user.updated_at = datetime.utcnow()
+            
+            await session.commit()
+            return user
+
     # --- Работа с вопросами ---
     
     async def get_first_question(self) -> Question:
@@ -254,18 +268,16 @@ class DatabaseService:
     
     # --- Работа с платежами ---
     
-    async def create_payment(self, telegram_id: int, amount: int, invoice_id: str, description: str = None) -> Payment:
+    async def create_payment(self, user_id: int, amount: decimal.Decimal, currency: str, description: str, invoice_id: str, status: PaymentStatus) -> Payment:
         """Создать платеж"""
         async with async_session() as session:
-            user_stmt = select(User).where(User.telegram_id == telegram_id)
-            user_result = await session.execute(user_stmt)
-            user = user_result.scalar_one()
-            
             payment = Payment(
-                user_id=user.id,
+                user_id=user_id,
                 amount=amount,
+                currency=currency,
+                description=description,
                 invoice_id=invoice_id,
-                description=description
+                status=status
             )
             
             session.add(payment)
@@ -273,11 +285,18 @@ class DatabaseService:
             await session.refresh(payment)
             return payment
     
-    async def update_payment_status(self, invoice_id: str, status: PaymentStatus, 
+    async def get_payment_by_invoice_id(self, invoice_id: str) -> Optional[Payment]:
+        """Получить платеж по invoice_id"""
+        async with async_session() as session:
+            stmt = select(Payment).where(Payment.invoice_id == invoice_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def update_payment_status(self, payment_id: int, status: PaymentStatus, 
                                   robokassa_payment_id: str = None) -> Payment:
         """Обновить статус платежа"""
         async with async_session() as session:
-            stmt = select(Payment).where(Payment.invoice_id == invoice_id)
+            stmt = select(Payment).where(Payment.id == payment_id)
             result = await session.execute(stmt)
             payment = result.scalar_one()
             

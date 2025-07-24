@@ -1,18 +1,21 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
+import decimal
 
 from bot.services.database_service import db_service
-from bot.config import BASE_DIR, PERPLEXITY_ENABLED
+from bot.config import BASE_DIR, PERPLEXITY_ENABLED, settings
 from bot.models.api_models import (
     AnswerRequest, UserProfileUpdate, CurrentQuestionResponse, 
     NextQuestionResponse, UserProgressResponse, UserProfileResponse,
     QuestionResponse, ProgressResponse, UserStatusResponse, ErrorResponse
 )
 from loguru import logger
+from bot.services.oplata import RobokassaService
+from bot.database.models import PaymentStatus
 
 # Путь к статическим файлам
 STATIC_DIR = BASE_DIR / "frontend"
@@ -580,19 +583,164 @@ async def check_premium_report_status(telegram_id: int):
         logger.error(f"Error checking premium report status: {e}")
         return {"status": "error", "message": "Ошибка при проверке статуса платного отчета"}
 
+@app.post("/api/user/{telegram_id}/start-premium-payment", summary="Начать процесс оплаты премиум отчета")
+async def start_premium_payment(telegram_id: int):
+    try:
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        if user.is_premium_paid:
+            return {"status": "already_paid", "message": "Вы уже оплатили премиум отчет."}
+
+        # Генерируем уникальный Invoice ID
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        invoice_id = f"premium_{telegram_id}_{timestamp}"
+        
+        # Сумма оплаты (например, 1000 рублей)
+        amount_decimal = decimal.Decimal(1000.00) # Ваша цена за премиум отчет
+        amount_in_kopecks = int(amount_decimal * 100) # Преобразуем в копейки (целое число)
+        description = f"Оплата премиум отчета для пользователя {telegram_id}"
+        
+        robokassa = RobokassaService(
+            merchant_login=settings.ROBOKASSA_LOGIN,
+            merchant_password_1=settings.ROBOKASSA_PASSWORD_1,
+            merchant_password_2=settings.ROBOKASSA_PASSWORD_TEST # Использовать ROBOKASSA_PASSWORD_TEST
+        )
+        
+        payment_link = robokassa.generate_payment_link(
+            cost=amount_decimal,
+            number=invoice_id,
+            description=description,
+            is_test=1 if settings.ROBOKASSA_TEST else 0
+        )
+
+        # Сохраняем информацию о платеже в БД
+        await db_service.create_payment(
+            user_id=user.id,
+            amount=amount_in_kopecks, # Используем сумму в копейках
+            currency="RUB",
+            description=description,
+            invoice_id=invoice_id,
+            status=PaymentStatus.PENDING
+        )
+        
+        logger.info(f"💰 Сгенерирована платежная ссылка для пользователя {telegram_id}: {payment_link}")
+        
+        return {"status": "success", "message": "Платежная ссылка сгенерирована", "payment_link": payment_link}
+        
+    except Exception as e:
+        logger.error(f"Error starting premium payment for user {telegram_id}: {e}")
+        return {"status": "error", "message": f"Ошибка при инициализации платежа: {str(e)}"}
+
+@app.post("/api/robokassa/result", summary="Endpoint для ResultURL Robokassa")
+async def robokassa_result(request: Request):
+    try:
+        query_params = dict(request.query_params)
+        logger.info(f"🔔 Получено уведомление ResultURL от Robokassa: {query_params}")
+        
+        # Извлекаем параметры из запроса
+        out_sum = query_params.get('OutSum')
+        inv_id = query_params.get('InvId')
+        signature_value = query_params.get('SignatureValue')
+
+        if not all([out_sum, inv_id, signature_value]):
+            logger.warning("⚠️ Недостаточно параметров в ResultURL")
+            return "bad sign"
+
+        robokassa = RobokassaService(
+            merchant_login=settings.ROBOKASSA_LOGIN,
+            merchant_password_1=settings.ROBOKASSA_PASSWORD_1,
+            merchant_password_2=settings.ROBOKASSA_PASSWORD_TEST # Использовать ROBOKASSA_PASSWORD_TEST
+        )
+
+        # Проверяем подпись
+        if not robokassa.check_signature_result(decimal.Decimal(out_sum), inv_id, signature_value, robokassa.merchant_password_2):
+            logger.warning(f"❌ Неверная подпись в ResultURL для InvId: {inv_id}")
+            return "bad sign"
+
+        # Обновляем статус платежа в БД
+        payment = await db_service.get_payment_by_invoice_id(inv_id)
+        if payment:
+            await db_service.update_payment_status(payment.id, PaymentStatus.COMPLETED)
+            user = await db_service.get_user_by_id(payment.user_id)
+            if user:
+                await db_service.update_user_premium_status(user.telegram_id, True)
+                logger.info(f"✅ Платеж {inv_id} успешно завершен для пользователя {user.telegram_id}")
+            return f"OK{inv_id}"
+        else:
+            logger.warning(f"⚠️ Платеж с InvId {inv_id} не найден в БД")
+            return "bad sign"
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка обработки ResultURL Robokassa: {e}")
+        return "error"
+
+@app.get("/api/robokassa/success", summary="Endpoint для SuccessURL Robokassa")
+async def robokassa_success(request: Request):
+    try:
+        query_params = dict(request.query_params)
+        logger.info(f"✅ Получено уведомление SuccessURL от Robokassa: {query_params}")
+
+        out_sum = query_params.get('OutSum')
+        inv_id = query_params.get('InvId')
+        signature_value = query_params.get('SignatureValue')
+
+        if not all([out_sum, inv_id, signature_value]):
+            logger.warning("⚠️ Недостаточно параметров в SuccessURL")
+            # Перенаправляем на страницу ошибки или главную
+            return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
+
+
+        robokassa = RobokassaService(
+            merchant_login=settings.ROBOKASSA_LOGIN,
+            merchant_password_1=settings.ROBOKASSA_PASSWORD_1,
+            merchant_password_2=settings.ROBOKASSA_PASSWORD_TEST # Использовать ROBOKASSA_PASSWORD_TEST
+        )
+
+        if not robokassa.check_signature_result(decimal.Decimal(out_sum), inv_id, signature_value, robokassa.merchant_password_1):
+            logger.warning(f"❌ Неверная подпись в SuccessURL для InvId: {inv_id}")
+            return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
+
+        # Проверяем статус платежа в БД, чтобы убедиться, что он уже обработан ResultURL
+        payment = await db_service.get_payment_by_invoice_id(inv_id)
+        user_paid = False
+        if payment and payment.status == PaymentStatus.COMPLETED:
+            user_paid = True
+            logger.info(f"🎉 Платеж {inv_id} подтвержден через SuccessURL. Пользователь оплатил.")
+        else:
+            logger.warning(f"⚠️ Платеж {inv_id} не подтвержден через SuccessURL или статус не COMPLETED.")
+            return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
+
+        # Если все ок, перенаправляем на страницу с сообщением об успехе
+        return RedirectResponse(url="/complete-payment.html", status_code=302)
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка обработки SuccessURL Robokassa: {e}")
+        return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
+
+
+@app.get("/api/robokassa/fail", summary="Endpoint для FailURL Robokassa")
+async def robokassa_fail(request: Request):
+    logger.info(f"💔 Получено уведомление FailURL от Robokassa: {request.query_params}")
+    return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
+
+
 @app.post("/api/user/{telegram_id}/generate-premium-report", summary="Запустить генерацию платного отчета")
 async def start_premium_report_generation(telegram_id: int):
     """Запустить генерацию платного отчета пользователя (50 вопросов)"""
     try:
-        # Проверяем, что пользователь завершил тест
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
         if not user.test_completed:
             return {"status": "error", "message": "Тест не завершен"}
         
+        # Проверяем, оплатил ли пользователь премиум отчет
+        if not user.is_premium_paid:
+            logger.warning(f"⚠️ Пользователь {telegram_id} не оплатил премиум отчет. Перенаправляем на оплату.")
+            # Возвращаем статус, который фронтенд может интерпретировать для перенаправления на страницу оплаты
+            return {"status": "payment_required", "message": "Для генерации премиум отчета требуется оплата."}
+
         logger.info(f"🚀 Запускаем синхронную генерацию ПЛАТНОГО отчета для пользователя {telegram_id}")
         
-        # Запускаем синхронную генерацию платного отчета
         report_path = await generate_premium_report_background(telegram_id)
         
         if report_path:
