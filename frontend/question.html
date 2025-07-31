@@ -25,9 +25,6 @@
         <p class="question-area-note"><span>*</span> Ваши ответы должны быть более 500 знаков <br>
             Отвечайте неторопливо, подробно и вдумчиво</p>
             <textarea name="" class="question-area" id="questionArea"></textarea>
-        <button class="micro-button">
-            <img src="./images/micro-icon.svg" alt="">
-        </button>
     </div>
     <button class="button-triangle" id="nextButton">
         <span>Следующий вопрос</span>
@@ -35,6 +32,13 @@
     </button>
 </main>
 
+<!-- Модальное окно -->
+<div class="modal-overlay" id="welcomeModal">
+    <div class="modal-content">
+        <button class="modal-close" id="modalClose">&times;</button>
+        <img src="./images/modal.svg" alt="Добро пожаловать" class="modal-image">
+    </div>
+</div>
 
 <script src="js/jquery.min.js"></script>
 <script src="./js/jquery-ui.min.js"></script>

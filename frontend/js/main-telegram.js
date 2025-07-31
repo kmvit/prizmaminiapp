@@ -197,6 +197,12 @@ $(function() {
                 case 'free_download_if_paid':
                     initPriceOfferPage(); // Используем ту же логику, что и для price-offer
                     break;
+                case 'complete-payment':
+                    initCompletePaymentPage();
+                    break;
+                case 'uncomplete-payment':
+                    initUncompletePaymentPage();
+                    break;
             }
         } else {
             console.log('⏳ TelegramWebApp not ready, retrying...');
@@ -906,15 +912,18 @@ $(function() {
         // Обработка изменений в textarea для обновления состояния кнопки
         $('#questionArea').on('input', updateButtonState);
         
-        // Обработка микрофона - транскрибация речи в текст  
-        $('.micro-button').click(function() {
-            safeHapticFeedback('medium');
-            startVoiceTranscription();
-        });
-        
         // Загружаем вопрос при инициализации
         console.log('🔄 Вызываем loadCurrentQuestion...');
         loadCurrentQuestion();
+        
+        // Показываем приветственное модальное окно с небольшой задержкой (только при первом посещении)
+        setTimeout(() => {
+            const hasSeenModal = localStorage.getItem('hasSeenWelcomeModal');
+            if (!hasSeenModal) {
+                showWelcomeModal();
+                localStorage.setItem('hasSeenWelcomeModal', 'true');
+            }
+        }, 500);
         
         // Для тестирования
         if (!localStorage.getItem('test_telegram_id')) {
@@ -924,6 +933,8 @@ $(function() {
         
         console.log('🎯 ============ ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА ============');
         
+        // Функции голосового ввода закомментированы - кнопка микрофона удалена
+        /*
         function startVoiceTranscription() {
             // Сначала пробуем использовать нативные возможности Telegram
             if (window.TelegramWebApp && window.TelegramWebApp.platform !== 'unknown') {
@@ -1094,6 +1105,50 @@ $(function() {
             
             // Анимация появления
             hint.css('opacity', '0').animate({ opacity: 1 }, 500);
+        }
+        */
+        
+        // Функция показа приветственного модального окна
+        function showWelcomeModal() {
+            console.log('🎉 Показываем приветственное модальное окно');
+            
+            const modal = $('#welcomeModal');
+            const closeBtn = $('#modalClose');
+            
+            // Показываем модальное окно с анимацией
+            modal.addClass('show');
+            
+            // Обработчик закрытия по кнопке
+            closeBtn.on('click', function() {
+                closeModal();
+            });
+            
+            // Обработчик закрытия по клику вне модального окна
+            modal.on('click', function(e) {
+                if (e.target === this) {
+                    closeModal();
+                }
+            });
+            
+            // Обработчик закрытия по клавише Escape
+            $(document).on('keydown.modal', function(e) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                }
+            });
+            
+            function closeModal() {
+                console.log('🔒 Закрываем модальное окно');
+                modal.removeClass('show');
+                
+                // Удаляем обработчики событий
+                closeBtn.off('click');
+                modal.off('click');
+                $(document).off('keydown.modal');
+                
+                // Тактильная обратная связь при закрытии
+                safeHapticFeedback('light');
+            }
         }
     }
 
@@ -2048,5 +2103,81 @@ $(function() {
         }
         
         console.log('📁 Страница скачивания инициализирована');
+    }
+
+    function initCompletePaymentPage() {
+        console.log('💳 Инициализация страницы успешного платежа...');
+        
+        // Развернуть viewport
+        if (window.TelegramWebApp && window.TelegramWebApp.expandViewport) {
+            window.TelegramWebApp.expandViewport();
+        }
+        
+        // Скрыть стандартные кнопки
+        safeMainButton('hide');
+        safeBackButton('hide');
+
+        // Обработка кнопки "Продолжить опрос"
+        $('.button-payment').click(function(e) {
+            e.preventDefault();
+            safeHapticFeedback('light');
+            window.location.href = 'question.html';
+        });
+
+        // Показать тактильную обратную связь при загрузке страницы
+        setTimeout(() => {
+            safeHapticFeedback('medium');
+        }, 500);
+
+        console.log('💳 Страница успешного платежа инициализирована');
+    }
+
+    function initUncompletePaymentPage() {
+        console.log('❌ Инициализация страницы неудачного платежа...');
+        
+        // Развернуть viewport
+        if (window.TelegramWebApp && window.TelegramWebApp.expandViewport) {
+            window.TelegramWebApp.expandViewport();
+        }
+        
+        // Скрыть стандартные кнопки
+        safeMainButton('hide');
+        safeBackButton('hide');
+
+        // Обработка кнопки "Попробовать снова"
+        $('.button-payment').click(function(e) {
+            e.preventDefault();
+            safeHapticFeedback('light');
+            window.location.href = 'price.html';
+        });
+
+        // Обработка кнопки "Написать в поддержку"
+        $('.button-gray').click(function(e) {
+            e.preventDefault();
+            safeHapticFeedback('light');
+            
+            // Открываем ссылку на поддержку
+            const supportUrl = $(this).attr('href');
+            if (supportUrl && supportUrl !== '#') {
+                try {
+                    const telegramAPI = getTelegramAPI();
+                    if (telegramAPI && telegramAPI.openLink) {
+                        telegramAPI.openLink(supportUrl);
+                    } else {
+                        window.open(supportUrl, '_blank');
+                    }
+                } catch (error) {
+                    console.error('❌ Ошибка при открытии ссылки поддержки:', error);
+                    window.open(supportUrl, '_blank');
+                }
+            }
+        });
+
+        // Показать тактильную обратную связь при загрузке страницы
+        setTimeout(() => {
+            safeHapticFeedback('medium');
+        }, 500);
+
+        console.log('❌ Страница неудачного платежа инициализирована');
     }
 }); 

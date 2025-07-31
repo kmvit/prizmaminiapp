@@ -742,8 +742,8 @@ async def robokassa_success(request: Request):
             logger.info(f"💰 Найден платеж в БД: ID={payment.id}, статус={payment.status}, пользователь={payment.user_id}")
             if payment.status == PaymentStatus.COMPLETED:
                 logger.info(f"🎉 Платеж {inv_id} подтвержден через SuccessURL. Пользователь оплатил.")
-                # Перенаправляем на страницу логина для премиум версии
-                return RedirectResponse(url="/login.html?premium=true", status_code=302)
+                # Перенаправляем на страницу успешного платежа
+                return RedirectResponse(url="/complete-payment.html", status_code=302)
             else:
                 logger.warning(f"⚠️ Платеж {inv_id} найден, но статус не COMPLETED: {payment.status}")
                 # Попробуем обновить статус на COMPLETED (на случай если ResultURL не сработал)
@@ -758,8 +758,8 @@ async def robokassa_success(request: Request):
                     logger.info(f"✅ Статус пользователя после обновления: is_paid={updated_user.is_paid}")
                 else:
                     logger.error(f"❌ Пользователь с ID {payment.user_id} не найден")
-                # Перенаправляем на страницу логина для премиум версии
-                return RedirectResponse(url="/login.html?premium=true", status_code=302)
+                # Перенаправляем на страницу успешного платежа
+                return RedirectResponse(url="/complete-payment.html", status_code=302)
         else:
             logger.warning(f"⚠️ Платеж с InvId {inv_id} не найден в БД")
             return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
