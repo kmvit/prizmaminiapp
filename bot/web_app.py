@@ -649,13 +649,7 @@ async def start_premium_payment(telegram_id: int):
 
         # 4. Формируем URL для возврата в Telegram Web App
         # Получаем базовый URL из настроек или определяем автоматически
-        base_url = getattr(settings, 'WEBAPP_URL', None)
-        if not base_url or base_url == 'https://your-domain.com':
-            # Автоматически определяем URL из запроса
-            base_url = str(request.base_url).rstrip('/')
-            logger.info(f"🌐 Автоматически определен базовый URL: {base_url}")
-        else:
-            logger.info(f"🌐 Используем базовый URL из настроек: {base_url}")
+        base_url = getattr(settings, 'WEBAPP_URL', 'https://your-domain.com')
         
         # URL для успешного платежа - возвращаемся в приложение
         success_url = f"{base_url}/api/robokassa/success"
@@ -733,15 +727,44 @@ async def robokassa_result(request: Request):
         logger.error(f"❌ Ошибка обработки ResultURL Robokassa: {e}")
         return "error"
 
+# Кэш для отслеживания обработанных SuccessURL запросов
+_processed_success_requests = set()
+_last_cache_cleanup = time.time()
+
+def cleanup_success_cache():
+    """Очищаем кэш обработанных запросов каждые 24 часа"""
+    global _last_cache_cleanup, _processed_success_requests
+    current_time = time.time()
+    if current_time - _last_cache_cleanup > 86400:  # 24 часа
+        _processed_success_requests.clear()
+        _last_cache_cleanup = current_time
+        logger.info("🧹 Кэш обработанных SuccessURL запросов очищен")
+
 @app.get("/api/robokassa/success", summary="Endpoint для SuccessURL Robokassa")
 async def robokassa_success(request: Request):
     try:
-        query_params = dict(request.query_params)
-        logger.info(f"✅ Получено уведомление SuccessURL от Robokassa: {query_params}")
+        # Очищаем кэш при необходимости
+        cleanup_success_cache()
         
+        query_params = dict(request.query_params)
         out_sum = query_params.get('OutSum')
         inv_id = query_params.get('InvId')
         signature_value = query_params.get('SignatureValue')
+        
+        # Создаем уникальный ключ для запроса
+        request_key = f"{inv_id}_{out_sum}_{signature_value}"
+        
+        # Проверяем, не обрабатывали ли мы уже этот запрос
+        if request_key in _processed_success_requests:
+            logger.info(f"🔄 Дублирующий запрос SuccessURL для InvId {inv_id}, пропускаем")
+            response = RedirectResponse(url="/complete-payment.html", status_code=302)
+            # Добавляем заголовки для предотвращения кэширования
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            return response
+        
+        logger.info(f"✅ Получено уведомление SuccessURL от Robokassa: {query_params}")
         
         if not all([out_sum, inv_id, signature_value]):
             logger.warning("⚠️ Недостаточно параметров в SuccessURL")
@@ -766,9 +789,16 @@ async def robokassa_success(request: Request):
             
             if payment.status == PaymentStatus.COMPLETED:
                 logger.info(f"🎉 Платеж {inv_id} уже подтвержден. Перенаправляем на страницу успеха.")
+                # Добавляем запрос в кэш обработанных
+                _processed_success_requests.add(request_key)
                 # Перенаправляем на страницу успешного платежа
                 logger.info(f"🔄 Перенаправление на /complete-payment.html")
-                return RedirectResponse(url="/complete-payment.html", status_code=302)
+                response = RedirectResponse(url="/complete-payment.html", status_code=302)
+                # Добавляем заголовки для предотвращения кэширования
+                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+                return response
             else:
                 logger.warning(f"⚠️ Платеж {inv_id} найден, но статус не COMPLETED: {payment.status}")
                 # Попробуем обновить статус на COMPLETED (на случай если ResultURL не сработал)
@@ -784,9 +814,16 @@ async def robokassa_success(request: Request):
                 else:
                     logger.error(f"❌ Пользователь с ID {payment.user_id} не найден")
                 
+                # Добавляем запрос в кэш обработанных
+                _processed_success_requests.add(request_key)
                 # Перенаправляем на страницу успешного платежа
                 logger.info(f"🔄 Перенаправляем пользователя на страницу успешного платежа")
-                return RedirectResponse(url="/complete-payment.html", status_code=302)
+                response = RedirectResponse(url="/complete-payment.html", status_code=302)
+                # Добавляем заголовки для предотвращения кэширования
+                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+                return response
         else:
             logger.warning(f"⚠️ Платеж с InvId {inv_id} не найден в БД")
             logger.error(f"❌ Перенаправление на страницу неудачного платежа из-за отсутствия платежа в БД")
