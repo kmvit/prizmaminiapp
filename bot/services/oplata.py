@@ -77,4 +77,10 @@ class RobokassaService:
         print("[Robokassa] FailURL:", fail_url)
         print("[Robokassa] Password1:", self.merchant_password_1)
         print("[Robokassa] Итоговая ссылка:", link)
+        print("[Robokassa] Проверка подписи SuccessURL:")
+        test_signature = self.calculate_signature(out_sum, number, self.merchant_password_1)
+        print(f"[Robokassa] Ожидаемая подпись SuccessURL: {test_signature}")
+        print(f"[Robokassa] Проверка подписи ResultURL:")
+        test_signature_result = self.calculate_signature(out_sum, number, self.merchant_password_2)
+        print(f"[Robokassa] Ожидаемая подпись ResultURL: {test_signature_result}")
         return link 

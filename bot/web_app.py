@@ -644,18 +644,27 @@ async def start_premium_payment(telegram_id: int):
             merchant_login=settings.ROBOKASSA_LOGIN,
             merchant_password_1=settings.ROBOKASSA_PASSWORD_1,
             merchant_password_2=settings.ROBOKASSA_PASSWORD_2,
-            is_test=settings.ROBOKASSA_TEST
+            is_test=1 if settings.ROBOKASSA_TEST else 0
         )
 
         # 4. Формируем URL для возврата в Telegram Web App
         # Получаем базовый URL из настроек или определяем автоматически
-        base_url = getattr(settings, 'WEBAPP_URL', 'https://your-domain.com')
+        base_url = getattr(settings, 'WEBAPP_URL', None)
+        if not base_url or base_url == 'https://your-domain.com':
+            # Автоматически определяем URL из запроса
+            base_url = str(request.base_url).rstrip('/')
+            logger.info(f"🌐 Автоматически определен базовый URL: {base_url}")
+        else:
+            logger.info(f"🌐 Используем базовый URL из настроек: {base_url}")
         
         # URL для успешного платежа - возвращаемся в приложение
         success_url = f"{base_url}/api/robokassa/success"
         
         # URL для неуспешного платежа - возвращаемся в приложение с ошибкой
         fail_url = f"{base_url}/api/robokassa/fail"
+        
+        logger.info(f"🔗 SuccessURL: {success_url}")
+        logger.info(f"🔗 FailURL: {fail_url}")
 
         # 5. Генерируем ссылку Robokassa с URL возврата
         payment_link = robokassa.generate_payment_link(
@@ -700,11 +709,21 @@ async def robokassa_result(request: Request):
         # Обновляем статус платежа в БД
         payment = await db_service.get_payment_by_invoice_id(inv_id)
         if payment:
+            logger.info(f"💰 Найден платеж в БД: ID={payment.id}, статус={payment.status}, пользователь={payment.user_id}")
+            
+            # Проверяем, не обработан ли уже платеж
+            if payment.status == PaymentStatus.COMPLETED:
+                logger.info(f"✅ Платеж {inv_id} уже обработан (статус COMPLETED)")
+                return f"OK{inv_id}"
+            
+            # Обновляем статус платежа
             await db_service.update_payment_status(payment.id, PaymentStatus.COMPLETED)
             user = await db_service.get_user_by_id(payment.user_id)
             if user:
                 await db_service.upgrade_to_paid(user.telegram_id)
                 logger.info(f"✅ Платеж {inv_id} успешно завершен для пользователя {user.telegram_id}")
+            else:
+                logger.error(f"❌ Пользователь с ID {payment.user_id} не найден")
             return f"OK{inv_id}"
         else:
             logger.warning(f"⚠️ Платеж с InvId {inv_id} не найден в БД")
@@ -719,18 +738,22 @@ async def robokassa_success(request: Request):
     try:
         query_params = dict(request.query_params)
         logger.info(f"✅ Получено уведомление SuccessURL от Robokassa: {query_params}")
+        
         out_sum = query_params.get('OutSum')
         inv_id = query_params.get('InvId')
         signature_value = query_params.get('SignatureValue')
+        
         if not all([out_sum, inv_id, signature_value]):
             logger.warning("⚠️ Недостаточно параметров в SuccessURL")
             return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
+        
         robokassa = RobokassaService(
             merchant_login=settings.ROBOKASSA_LOGIN,
             merchant_password_1=settings.ROBOKASSA_PASSWORD_1,
             merchant_password_2=settings.ROBOKASSA_PASSWORD_2,
-            is_test=settings.ROBOKASSA_TEST
+            is_test=1 if settings.ROBOKASSA_TEST else 0
         )
+        
         # Проверяем подпись для SuccessURL
         if not robokassa.check_signature_success(out_sum, inv_id, signature_value):
             logger.warning(f"❌ Неверная подпись в SuccessURL для InvId: {inv_id}")
@@ -740,9 +763,11 @@ async def robokassa_success(request: Request):
         payment = await db_service.get_payment_by_invoice_id(inv_id)
         if payment:
             logger.info(f"💰 Найден платеж в БД: ID={payment.id}, статус={payment.status}, пользователь={payment.user_id}")
+            
             if payment.status == PaymentStatus.COMPLETED:
-                logger.info(f"🎉 Платеж {inv_id} подтвержден через SuccessURL. Пользователь оплатил.")
+                logger.info(f"🎉 Платеж {inv_id} уже подтвержден. Перенаправляем на страницу успеха.")
                 # Перенаправляем на страницу успешного платежа
+                logger.info(f"🔄 Перенаправление на /complete-payment.html")
                 return RedirectResponse(url="/complete-payment.html", status_code=302)
             else:
                 logger.warning(f"⚠️ Платеж {inv_id} найден, но статус не COMPLETED: {payment.status}")
@@ -758,10 +783,13 @@ async def robokassa_success(request: Request):
                     logger.info(f"✅ Статус пользователя после обновления: is_paid={updated_user.is_paid}")
                 else:
                     logger.error(f"❌ Пользователь с ID {payment.user_id} не найден")
+                
                 # Перенаправляем на страницу успешного платежа
+                logger.info(f"🔄 Перенаправляем пользователя на страницу успешного платежа")
                 return RedirectResponse(url="/complete-payment.html", status_code=302)
         else:
             logger.warning(f"⚠️ Платеж с InvId {inv_id} не найден в БД")
+            logger.error(f"❌ Перенаправление на страницу неудачного платежа из-за отсутствия платежа в БД")
             return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
 
     except Exception as e:

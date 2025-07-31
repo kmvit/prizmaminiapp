@@ -2121,17 +2121,24 @@ $(function() {
         $('.button-payment').click(function(e) {
             e.preventDefault();
             safeHapticFeedback('light');
+            console.log('🔄 Переход к вопросам после оплаты');
             window.location.href = 'question.html';
         });
 
-        // Показать тактильную обратную связь при загрузке страницы
-        setTimeout(() => {
-            safeHapticFeedback('medium');
-        }, 500);
+        // Обработка кнопки "Скачать отчет"
+        $('.button-gray').click(function(e) {
+            e.preventDefault();
+            safeHapticFeedback('light');
+            console.log('📥 Переход к скачиванию отчета после оплаты');
+            window.location.href = 'download.html';
+        });
+
+        // Проверяем статус пользователя
+        checkUserStatus();
 
         console.log('💳 Страница успешного платежа инициализирована');
     }
-
+пше 
     function initUncompletePaymentPage() {
         console.log('❌ Инициализация страницы неудачного платежа...');
         
