@@ -34,7 +34,7 @@ FREE_QUESTIONS_LIMIT = int(os.getenv("FREE_QUESTIONS_LIMIT", "10"))  # Коли�
 
 class Settings(BaseSettings):
     # BOT_TOKEN: str  # Не нужен для веб-приложения
-    WEBAPP_URL: str = "http://localhost:8080"
+    WEBAPP_URL: str = "https://your-domain.com"  # URL вашего веб-приложения
     DATABASE_URL: str
     PERPLEXITY_API_KEY: str = ""  # Делаем необязательным
     PERPLEXITY_MODEL: str = "sonar"  # Модель по умолчанию
@@ -42,8 +42,8 @@ class Settings(BaseSettings):
 
     ROBOKASSA_LOGIN: str
     ROBOKASSA_PASSWORD_1: str
-    ROBOKASSA_PASSWORD_TEST: str = "default_password2"
-    ROBOKASSA_TEST: bool = True # Было str, меняю на bool и устанавливаю True для тестовых платежей
+    ROBOKASSA_PASSWORD_2: str
+    ROBOKASSA_TEST: int = 1 
     FREE_QUESTIONS_LIMIT: int = 10  # Количество бесплатных вопросов
 
     class Config:
@@ -55,8 +55,8 @@ try:
     settings = Settings(
         ROBOKASSA_LOGIN=os.getenv("ROBOKASSA_LOGIN"),
         ROBOKASSA_PASSWORD_1=os.getenv("ROBOKASSA_PASSWORD_1"),
-        ROBOKASSA_PASSWORD_TEST=os.getenv("ROBOKASSA_PASSWORD_TEST"),
-        ROBOKASSA_TEST=os.getenv("ROBOKASSA_TEST", "True").lower() == "true"
+        ROBOKASSA_PASSWORD_2=os.getenv("ROBOKASSA_PASSWORD_2"),
+        ROBOKASSA_TEST=os.getenv("ROBOKASSA_TEST", "1") == "1"
     )
     if not PERPLEXITY_ENABLED:
         print("ℹ️ Perplexity API отключен")

@@ -7,8 +7,7 @@
     <meta name="format-detection" content="telephone=no">
     <title>PRIZMA</title>
     <link rel="stylesheet" href="css/main.css">
-    <script src="js/config.js?v=1735027891"></script>
-    <script src="js/telegram-vanilla.js?v=1735027891"></script>
+    <script src="js/telegram-vanilla.js"></script>
 </head>
 <body class="bodyLogin">
 
@@ -21,7 +20,7 @@
             <img src="./images/logo.svg" alt="">
         </div>
         <h1 class="login-title linear-text">Давайте познакомимся!</h1>
-        <p class="login-subtitle">Введите свои данные ниже
+        <p class="login-subtitle">Введите свои данные ниже <br>
             Они ВАЖНЫ для результатов вашего аудита</p>
     </div>
     <div class="login-form">
@@ -46,26 +45,12 @@
         </div>
     </div>
     <a class="button" href="question.html" id="continueButton">Продолжить</a>
-    
-    <!-- Отладочная панель (будет скрыта в продакшене) -->
-    <div id="debugPanel" style="position: fixed; bottom: 0; left: 0; right: 0; background: #000; color: #fff; padding: 10px; font-size: 12px; max-height: 200px; overflow-y: auto; display: none;">
-        <div style="margin-bottom: 10px;">
-            <strong>🐛 Отладка:</strong>
-            <button onclick="document.getElementById('debugPanel').style.display='none'" style="float: right;">✖</button>
-        </div>
-        <div id="debugInfo"></div>
-        <div style="margin-top: 10px;">
-            <input type="number" id="debugTelegramId" placeholder="Введите Telegram ID для тестирования" style="width: 200px; margin-right: 10px;">
-            <button onclick="testWithCustomId()">Тест с этим ID</button>
-        </div>
-    </div>
-    <button onclick="document.getElementById('debugPanel').style.display='block'" style="position: fixed; bottom: 10px; right: 10px; background: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 5px; z-index: 1000;">🐛</button>
 </main>
 
 
 
 <script src="js/jquery.min.js"></script>
 <script src="./js/jquery-ui.min.js"></script>
-<script src="js/main-telegram.js?v=1735027891"></script>
+<script src="js/main-telegram.js"></script>
 </body>
 </html>

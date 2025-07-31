@@ -185,11 +185,17 @@ $(function() {
                 case 'price':
                     initPricePage();
                     break;
+                case 'price-offer':
+                    initPriceOfferPage();
+                    break;
                 case 'payment':
                     initPaymentPage();
                     break;
                 case 'download':
                     initDownloadPage();
+                    break;
+                case 'free_download_if_paid':
+                    initPriceOfferPage(); // Используем ту же логику, что и для price-offer
                     break;
             }
         } else {
@@ -262,6 +268,75 @@ $(function() {
         safeMainButton('hide');
         safeBackButton('hide');
 
+        // Проверяем статус пользователя при загрузке главной страницы
+        const telegramId = window.TelegramWebApp.getUserId();
+        
+        async function checkUserStatus() {
+            try {
+                console.log('🔍 Проверяем статус пользователя на главной странице...');
+                const response = await fetch(`/api/user/${telegramId}/progress`);
+                const data = await response.json();
+                
+                if (response.ok && data.user) {
+                    console.log('👤 Статус пользователя:', data.user);
+                    
+                    // Если пользователь оплатил, но тест не завершен
+                    if (data.user.is_paid && !data.user.test_completed) {
+                        console.log('💎 Пользователь оплатил, но тест не завершен. Перенаправляем на специальную страницу.');
+                        window.location.href = 'free_download_if_paid.html';
+                        return;
+                    }
+                    
+                    // Если пользователь уже завершил тест, проверяем статус отчетов
+                    if (data.user.test_completed) {
+                        console.log('✅ Пользователь уже завершил тест. Проверяем статус отчетов...');
+                        
+                        // Проверяем статус всех отчетов
+                        const reportsResponse = await fetch(`/api/user/${telegramId}/reports-status`);
+                        const reportsData = await reportsResponse.json();
+                        
+                        if (reportsResponse.ok && reportsData.available_report) {
+                            const availableReport = reportsData.available_report;
+                            
+                            if (availableReport.status === 'ready') {
+                                if (availableReport.type === 'premium') {
+                                    console.log('💎 Премиум отчет готов! Перенаправляем на страницу скачивания премиум отчета.');
+                                    window.location.href = 'download.html';
+                                } else {
+                                    // Проверяем, оплатил ли пользователь
+                                    if (reportsData.user && reportsData.user.is_paid) {
+                                        console.log('🆓💎 Пользователь оплатил, но есть только бесплатный отчет! Перенаправляем на специальную страницу.');
+                                        window.location.href = 'free_download_if_paid.html';
+                                    } else {
+                                        console.log('🆓 Бесплатный отчет готов! Перенаправляем на страницу спецпредложения.');
+                                        window.location.href = 'price-offer.html';
+                                    }
+                                }
+                                return;
+                            } else if (availableReport.status === 'processing') {
+                                console.log('⏳ Отчет генерируется. Перенаправляем на страницу загрузки.');
+                                window.location.href = 'loading.html';
+                                return;
+                            } else if (availableReport.status === 'failed') {
+                                console.log('❌ Ошибка генерации отчета. Перенаправляем на страницу загрузки для повторной попытки.');
+                                window.location.href = 'loading.html';
+                                return;
+                            }
+                        } else {
+                            console.log('📄 Статус отчетов не определен. Перенаправляем на страницу загрузки.');
+                            window.location.href = 'loading.html';
+                            return;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Ошибка проверки статуса пользователя:', error);
+            }
+        }
+        
+        // Запускаем проверку статуса
+        checkUserStatus();
+
         // Обработка кнопки "Начать анализ"
         $('.button[href="steps.html"]').click(function(e) {
             e.preventDefault();
@@ -291,6 +366,17 @@ $(function() {
         console.log('👤 ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ ЛОГИНА');
         console.log('👤 =============================================================');
         
+        // Проверяем параметр premium в URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const isPremium = urlParams.get('premium') === 'true';
+        
+        if (isPremium) {
+            console.log('💎 Обнаружен параметр premium=true, перенаправляем на премиум версию');
+            // Если пользователь уже оплатил премиум, перенаправляем сразу на вопросы
+            window.location.href = 'question.html';
+            return;
+        }
+        
         // Показать кнопку назад (если поддерживается)
         safeBackButton('show');
         
@@ -302,6 +388,73 @@ $(function() {
         console.log('👤 User Data:', userData);
         console.log('👤 window.TelegramWebApp доступен:', !!window.TelegramWebApp);
         console.log('👤 window.TelegramWebApp.getUserId доступен:', !!window.TelegramWebApp?.getUserId);
+        
+        // Проверяем статус пользователя при загрузке страницы
+        async function checkUserStatus() {
+            try {
+                console.log('🔍 Проверяем статус пользователя...');
+                const response = await fetch(`/api/user/${telegramId}/progress`);
+                const data = await response.json();
+                
+                if (response.ok && data.user) {
+                    console.log('👤 Статус пользователя:', data.user);
+                    
+                    // Если пользователь оплатил, но тест не завершен
+                    if (data.user.is_paid && !data.user.test_completed) {
+                        console.log('💎 Пользователь оплатил, но тест не завершен. Перенаправляем на специальную страницу.');
+                        window.location.href = 'free_download_if_paid.html';
+                        return;
+                    }
+                    
+                    // Если пользователь уже завершил тест, проверяем статус отчетов
+                    if (data.user.test_completed) {
+                        console.log('✅ Пользователь уже завершил тест. Проверяем статус отчетов...');
+                        
+                        // Проверяем статус всех отчетов
+                        const reportsResponse = await fetch(`/api/user/${telegramId}/reports-status`);
+                        const reportsData = await reportsResponse.json();
+                        
+                        if (reportsResponse.ok && reportsData.available_report) {
+                            const availableReport = reportsData.available_report;
+                            
+                            if (availableReport.status === 'ready') {
+                                if (availableReport.type === 'premium') {
+                                    console.log('💎 Премиум отчет готов! Перенаправляем на страницу скачивания премиум отчета.');
+                                    window.location.href = 'download.html';
+                                } else {
+                                    // Проверяем, оплатил ли пользователь
+                                    if (reportsData.user && reportsData.user.is_paid) {
+                                        console.log('🆓💎 Пользователь оплатил, но есть только бесплатный отчет! Перенаправляем на специальную страницу.');
+                                        window.location.href = 'free_download_if_paid.html';
+                                    } else {
+                                        console.log('🆓 Бесплатный отчет готов! Перенаправляем на страницу спецпредложения.');
+                                        window.location.href = 'price-offer.html';
+                                    }
+                                }
+                                return;
+                            } else if (availableReport.status === 'processing') {
+                                console.log('⏳ Отчет генерируется. Перенаправляем на страницу загрузки.');
+                                window.location.href = 'loading.html';
+                                return;
+                            } else if (availableReport.status === 'failed') {
+                                console.log('❌ Ошибка генерации отчета. Перенаправляем на страницу загрузки для повторной попытки.');
+                                window.location.href = 'loading.html';
+                                return;
+                            }
+                        } else {
+                            console.log('📄 Статус отчетов не определен. Перенаправляем на страницу загрузки.');
+                            window.location.href = 'loading.html';
+                            return;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Ошибка проверки статуса пользователя:', error);
+            }
+        }
+        
+        // Запускаем проверку статуса
+        checkUserStatus();
         
         // Асинхронная функция для загрузки профиля пользователя
         async function loadUserProfile() {
@@ -543,6 +696,13 @@ $(function() {
                 $('#questionText').append('<br><small style="color: #ff6b6b;">💎 Этот вопрос доступен в премиум-версии</small>');
             }
             
+            // Обновляем состояние кнопки при загрузке нового вопроса
+            updateButtonState();
+            
+            // Устанавливаем начальное состояние кнопки
+            $('#nextButton').prop('disabled', true).addClass('disabled');
+            $('#nextButton span').text('Еще 500 символов');
+            
             console.log('Question loaded:', question);
         }
         
@@ -558,6 +718,12 @@ $(function() {
             if (!answerText) {
                 console.log('❌ Пустой ответ');
                 safeShowAlert('Пожалуйста, введите ответ на вопрос');
+                return;
+            }
+            
+            if (answerText.length < 500) {
+                console.log('❌ Ответ слишком короткий:', answerText.length, 'символов');
+                safeShowAlert('Ответ должен содержать минимум 500 символов');
                 return;
             }
             
@@ -614,7 +780,7 @@ $(function() {
                         showSuccessMessage('Ответ сохранен!');
                         
                     } else if (data.status === 'redirect_to_loading') {
-                        console.log('🎉 Тест завершен! Перенаправляем на loading.html для генерации отчета');
+                        console.log('🎉 Тест завершен! Проверяем тип пользователя для определения следующей страницы');
                         console.log('📊 Полученные данные:', data);
                         
                         const message = data.message || 'Тест завершен!';
@@ -623,9 +789,35 @@ $(function() {
                         // Показываем сообщение пользователю
                         safeShowAlert(message);
                         
-                        // Мгновенное перенаправление на loading.html
-                        console.log('🔄 Выполняем перенаправление на loading.html...');
-                        window.location.href = 'loading.html';
+                        // Проверяем, является ли пользователь премиум или бесплатным
+                        try {
+                            const progressResponse = await fetch(`${API_BASE_URL}/api/user/${currentTelegramId}/progress`);
+                            const progressData = await progressResponse.json();
+                            
+                            if (progressResponse.ok) {
+                                console.log('📊 Прогресс пользователя:', progressData);
+                                
+                                // Если пользователь премиум (оплатил)
+                                if (progressData.user.is_paid) {
+                                    console.log('💎 Пользователь премиум, переходим на loading.html для генерации премиум отчета');
+                                    window.location.href = 'loading.html';
+                                }
+                                // Если пользователь ответил на все бесплатные вопросы и не является премиум
+                                else if (progressData.progress.answered >= progressData.progress.free_questions_limit) {
+                                    console.log('🆓 Пользователь завершил бесплатные вопросы, переходим на price-offer.html');
+                                    window.location.href = 'price-offer.html';
+                                } else {
+                                    console.log('⚠️ Неожиданная ситуация, переходим на loading.html');
+                                    window.location.href = 'loading.html';
+                                }
+                            } else {
+                                console.log('⚠️ Не удалось получить прогресс, переходим на loading.html');
+                                window.location.href = 'loading.html';
+                            }
+                        } catch (error) {
+                            console.error('❌ Ошибка проверки прогресса:', error);
+                            window.location.href = 'loading.html';
+                        }
                         
                     } else {
                         console.warn('⚠️ Неизвестный статус ответа:', data.status);
@@ -676,16 +868,43 @@ $(function() {
             console.error('❌ Ошибка скрытия MainButton:', error);
         }
         
+        // Функция для проверки длины текста и управления состоянием кнопки
+        function updateButtonState() {
+            const answerText = $('#questionArea').val().trim();
+            const minLength = 500;
+            const currentLength = answerText.length;
+            
+            if (currentLength >= minLength) {
+                $('#nextButton').prop('disabled', false).removeClass('disabled');
+                $('#nextButton span').text('Следующий вопрос');
+            } else {
+                $('#nextButton').prop('disabled', true).addClass('disabled');
+                const remaining = minLength - currentLength;
+                $('#nextButton span').text(`Еще ${remaining} символов`);
+            }
+        }
+        
         // Используем только HTML кнопку с SVG треугольником
-        $('#nextButton').show().off('click').on('click', submitAnswer);
+        $('#nextButton').show().off('click').on('click', function() {
+            const answerText = $('#questionArea').val().trim();
+            if (answerText.length >= 500) {
+                submitAnswer();
+            }
+        });
         console.log('✅ HTML кнопка активирована');
         
         // Обработка Enter в textarea
         $('#questionArea').on('keydown', function(e) {
             if (e.ctrlKey && e.keyCode === 13) {
-                submitAnswer();
+                const answerText = $('#questionArea').val().trim();
+                if (answerText.length >= 500) {
+                    submitAnswer();
+                }
             }
         });
+        
+        // Обработка изменений в textarea для обновления состояния кнопки
+        $('#questionArea').on('input', updateButtonState);
         
         // Обработка микрофона - транскрибация речи в текст  
         $('.micro-button').click(function() {
@@ -763,6 +982,9 @@ $(function() {
                 const newText = currentText + ' ' + finalTranscript;
                 $('#questionArea').val(newText.trim());
                 
+                // Обновляем состояние кнопки после изменения текста
+                updateButtonState();
+                
                 // Показываем промежуточный результат
                 if (interimTranscript) {
                     updateTranscriptionIndicator('🎤 Слышу: ' + interimTranscript);
@@ -809,6 +1031,9 @@ $(function() {
             $('.micro-button').removeClass('recording');
             $('.micro-button img').attr('src', './images/micro-icon.svg');
             hideTranscriptionIndicator();
+            
+            // Обновляем состояние кнопки после завершения транскрибации
+            updateButtonState();
         }
         
         function showTranscriptionIndicator() {
@@ -902,13 +1127,70 @@ $(function() {
             }
         }
 
+        // Функция для обратного отсчета времени
+        function startCountdown() {
+            let totalSeconds = 2 * 60 + 15; // 2:15 в секундах
+            let countdownInterval = null;
+            
+            function updateCountdown() {
+                const timeElement = document.getElementById('loading-time');
+                
+                // Проверяем, что элемент существует и страница еще загружена
+                if (!timeElement || document.readyState === 'unload') {
+                    if (countdownInterval) {
+                        clearTimeout(countdownInterval);
+                    }
+                    return;
+                }
+                
+                if (totalSeconds <= 0) {
+                    // Время истекло
+                    timeElement.textContent = '0:00';
+                    return;
+                }
+                
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+                const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                timeElement.textContent = timeString;
+                totalSeconds--;
+                
+                // Продолжаем отсчет каждую секунду
+                countdownInterval = setTimeout(updateCountdown, 1000);
+            }
+            
+            // Запускаем отсчет
+            updateCountdown();
+            
+            // Очищаем таймер при уходе со страницы
+            window.addEventListener('beforeunload', function() {
+                if (countdownInterval) {
+                    clearTimeout(countdownInterval);
+                }
+            });
+        }
+
         // Запускаем генерацию отчета сразу при загрузке страницы
         async function startReportGeneration() {
             try {
-                console.log('🚀 Запускаем генерацию отчета для пользователя:', telegramId);
+                console.log('🚀 Запускаем асинхронную генерацию отчета для пользователя:', telegramId);
                 updateLoadingStatus('Запускаем генерацию отчета...');
                 
-                const response = await fetch(`/api/user/${telegramId}/generate-report`, {
+                // Проверяем статус пользователя для определения типа отчета
+                const statusResponse = await fetch(`/api/user/${telegramId}/progress`);
+                const statusData = await statusResponse.json();
+                
+                let apiEndpoint;
+                if (statusResponse.ok && statusData.user && statusData.user.is_paid) {
+                    console.log('💎 Пользователь премиум, генерируем премиум отчет');
+                    apiEndpoint = `/api/user/${telegramId}/generate-premium-report`;
+                } else {
+                    console.log('🆓 Пользователь бесплатный, генерируем бесплатный отчет');
+                    apiEndpoint = `/api/user/${telegramId}/generate-report`;
+                }
+                
+                const response = await fetch(apiEndpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -918,21 +1200,47 @@ $(function() {
                 const data = await response.json();
                 console.log('📊 Результат запуска генерации:', data);
                 
-                if (data.status === 'success') {
+                if (data.status === 'started') {
+                    console.log('✅ Генерация отчета запущена асинхронно!');
+                    updateLoadingStatus('Генерация отчета запущена...');
+                    safeHapticFeedback('light');
+                    
+                    // Запускаем периодическую проверку статуса
+                    startStatusPolling();
+                    return true;
+                    
+                } else if (data.status === 'already_processing') {
+                    console.log('⏳ Отчет уже генерируется, начинаем проверку статуса');
+                    updateLoadingStatus('Отчет уже генерируется...');
+                    startStatusPolling();
+                    return true;
+                    
+                } else if (data.status === 'success') {
+                    // Обратная совместимость с синхронной генерацией
                     console.log('✅ Генерация отчета завершена успешно!');
                     updateLoadingStatus('Отчет готов! Переходим к скачиванию...');
                     safeHapticFeedback('light');
+                    
+                    // Определяем куда перенаправлять в зависимости от типа отчета
                     setTimeout(() => {
-                        window.location.href = 'download.html';
+                        if (statusData.user && statusData.user.is_paid) {
+                            window.location.href = 'download.html';
+                        } else {
+                            window.location.href = 'price-offer.html';
+                        }
                     }, 1500);
                     return true;
                     
                 } else if (data.status === 'error') {
-                    console.error('❌ Ошибка генерации отчета:', data.message);
-                    updateLoadingStatus('Произошла ошибка при генерации отчета...');
-                    safeShowAlert('Ошибка при генерации отчета: ' + data.message);
+                    console.error('❌ Ошибка запуска генерации отчета:', data.message);
+                    updateLoadingStatus('Ошибка запуска генерации...');
+                    safeShowAlert('Ошибка: ' + data.message);
                     setTimeout(() => {
-                        window.location.href = 'download.html'; // Все равно переходим на скачивание
+                        if (statusData.user && statusData.user.is_paid) {
+                            window.location.href = 'download.html';
+                        } else {
+                            window.location.href = 'price-offer.html';
+                        }
                     }, 3000);
                     return true;
                 }
@@ -940,9 +1248,13 @@ $(function() {
             } catch (error) {
                 console.error('❌ Ошибка при запуске генерации отчета:', error);
                 updateLoadingStatus('Ошибка соединения...');
-                safeShowAlert('Ошибка при генерации отчета. Попробуем позже.');
+                safeShowAlert('Ошибка при запуске генерации отчета.');
                 setTimeout(() => {
-                    window.location.href = 'download.html';
+                    if (statusData.user && statusData.user.is_paid) {
+                        window.location.href = 'download.html';
+                    } else {
+                        window.location.href = 'price-offer.html';
+                    }
                 }, 3000);
                 return true;
             }
@@ -950,29 +1262,63 @@ $(function() {
             return false;
         }
 
-        // Функция для проверки готовности отчета (fallback на случай если генерация идет долго)
+        // Функция для проверки готовности отчета
         async function checkReportStatus() {
             try {
                 console.log('🔍 Проверяем статус генерации отчета...');
-                const response = await fetch(`/api/user/${telegramId}/report-status`);
+                
+                // Используем новый API для проверки статуса всех отчетов
+                const response = await fetch(`/api/user/${telegramId}/reports-status`);
                 const data = await response.json();
                 
-                console.log('📊 Статус отчета:', data);
+                console.log('📊 Статус отчетов:', data);
                 
-                if (data.status === 'ready') {
-                    console.log('✅ Отчет готов! Перенаправляем на download.html');
-                    updateLoadingStatus('Отчет готов! Переходим к скачиванию...');
-                    safeHapticFeedback('light');
-                    setTimeout(() => {
-                        window.location.href = 'download.html';
-                    }, 1000);
-                    return true; // Останавливаем проверку
+                if (data.status === 'success' && data.available_report) {
+                    const availableReport = data.available_report;
                     
-                } else if (data.status === 'not_ready') {
-                    console.log('⏳ Отчет еще генерируется, ждем...');
-                    updateLoadingStatus('Анализируем ваши ответы...');
-                    return false; // Продолжаем проверку
-                    
+                    if (availableReport.status === 'ready') {
+                        if (availableReport.type === 'premium') {
+                            console.log('💎 Премиум отчет готов! Перенаправляем на download.html');
+                            updateLoadingStatus('Премиум отчет готов! Переходим к скачиванию...');
+                        } else {
+                            // Проверяем, оплатил ли пользователь
+                            if (data.user && data.user.is_paid) {
+                                console.log('🆓💎 Пользователь оплатил, но есть только бесплатный отчет! Перенаправляем на специальную страницу.');
+                                updateLoadingStatus('Бесплатный отчет готов! Переходим к специальной странице...');
+                            } else {
+                                console.log('🆓 Бесплатный отчет готов! Перенаправляем на price-offer.html');
+                                updateLoadingStatus('Бесплатный отчет готов! Переходим к спецпредложению...');
+                            }
+                        }
+                        safeHapticFeedback('light');
+                        setTimeout(() => {
+                            if (availableReport.type === 'premium') {
+                                window.location.href = 'download.html';
+                            } else {
+                                // Проверяем, оплатил ли пользователь
+                                if (data.user && data.user.is_paid) {
+                                    window.location.href = 'free_download_if_paid.html';
+                                } else {
+                                    window.location.href = 'price-offer.html';
+                                }
+                            }
+                        }, 1000);
+                        return true; // Останавливаем проверку
+                        
+                    } else if (availableReport.status === 'processing') {
+                        console.log('⏳ Отчет генерируется, ждем...');
+                        updateLoadingStatus('Анализируем ваши ответы...');
+                        return false; // Продолжаем проверку
+                        
+                    } else if (availableReport.status === 'failed') {
+                        console.error('❌ Ошибка генерации отчета:', availableReport.error || availableReport.message);
+                        updateLoadingStatus('Ошибка генерации отчета...');
+                        safeShowAlert('Произошла ошибка при генерации отчета: ' + (availableReport.error || availableReport.message));
+                        setTimeout(() => {
+                            window.location.href = 'download.html';
+                        }, 3000);
+                        return true; // Останавливаем проверку
+                    }
                 } else if (data.status === 'test_not_completed') {
                     console.log('⚠️ Тест не завершен, перенаправляем на question.html');
                     updateLoadingStatus('Тест не завершен...');
@@ -985,7 +1331,7 @@ $(function() {
                     console.error('❌ Ошибка статуса отчета:', data.message);
                     updateLoadingStatus('Ошибка проверки статуса...');
                     setTimeout(() => {
-                        window.location.href = 'download.html'; // Все равно переходим на скачивание
+                        window.location.href = 'download.html';
                     }, 3000);
                     return true; // Останавливаем проверку
                 }
@@ -1002,9 +1348,38 @@ $(function() {
             return false; // Продолжаем проверку
         }
 
+        // Функция для запуска периодической проверки статуса
+        function startStatusPolling() {
+            console.log('🔄 Запускаем периодическую проверку статуса отчета...');
+            
+            const pollInterval = setInterval(async () => {
+                try {
+                    const shouldStop = await checkReportStatus();
+                    
+                    if (shouldStop) {
+                        clearInterval(pollInterval);
+                        console.log('✅ Остановка периодической проверки статуса');
+                    }
+                } catch (error) {
+                    console.error('❌ Ошибка в периодической проверке статуса:', error);
+                }
+            }, 5000); // Проверяем каждые 5 секунд
+            
+            // Останавливаем опрос через 30 минут (максимальное время ожидания)
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                console.log('⏰ Превышено время ожидания генерации отчета');
+                updateLoadingStatus('Генерация занимает больше времени...');
+                safeShowAlert('Генерация отчета занимает больше времени, чем ожидалось. Попробуйте проверить статус позже.');
+            }, 30 * 60 * 1000); // 30 минут
+        }
+
         // Запускаем генерацию отчета
         console.log('🎬 Запускаем процесс генерации отчета...');
         updateLoadingStatus('Подготавливаем анализ...');
+        
+        // Запускаем обратный отсчет времени
+        startCountdown();
         
         startReportGeneration().then(generationCompleted => {
             if (!generationCompleted) {
@@ -1143,6 +1518,139 @@ $(function() {
             //     // window.location.href = 'complete-payment.html';
             // }
         });
+
+        $('#startFreeReport').off('click').on('click', function(e) {
+            e.preventDefault();
+            safeHapticFeedback('medium');
+            window.location.href = 'login.html';
+        });
+    }
+
+    function initPriceOfferPage() {
+        console.log('🎁 Инициализация страницы спецпредложения...');
+        
+        // Показать кнопку назад (если поддерживается)
+        try {
+            if (window.TelegramWebApp.BackButton) {
+                window.TelegramWebApp.BackButton.show();
+            }
+        } catch (error) {
+            console.log('⬅️ BackButton не поддерживается:', error);
+        }
+
+        // Получаем Telegram ID пользователя
+        const telegramId = getTelegramUserId();
+
+        // Обработка кнопки скачивания бесплатного отчета
+        $('#downloadFreeReport').off('click').on('click', async function(e) {
+            e.preventDefault();
+            safeHapticFeedback('medium');
+            
+            const telegramId = getTelegramUserId();
+            if (!telegramId) {
+                safeShowAlert('Ошибка: не удалось получить ID пользователя');
+                return;
+            }
+            
+            const $button = $(this);
+            const $span = $button.find('.download-file-text span');
+            const originalText = $span.text();
+            
+            try {
+                // Показываем индикатор загрузки
+                $button.addClass('loading');
+                $span.text('Скачиваем отчет...');
+                
+                // Проверяем статус отчетов для получения URL бесплатного отчета
+                const reportsResponse = await fetch(`${API_BASE_URL}/api/user/${telegramId}/reports-status`);
+                const reportsData = await reportsResponse.json();
+                
+                if (reportsResponse.ok && reportsData.available_report && reportsData.available_report.status === 'ready') {
+                    const availableReport = reportsData.available_report;
+                    
+                    // Убеждаемся, что это бесплатный отчет
+                    if (availableReport.type === 'free') {
+                        const reportUrl = `${API_BASE_URL}${availableReport.download_url}?download=1&source=telegram&t=${Date.now()}`;
+                        
+                        // Используем Telegram API для скачивания
+                        const telegramAPI = getTelegramAPI();
+                        if (isInTelegramWebApp() && telegramAPI && telegramAPI.openLink) {
+                            telegramAPI.openLink(reportUrl);
+                            $span.text('Отчет открыт!');
+                            safeHapticFeedback('light');
+                            
+                            if (telegramAPI.showAlert) {
+                                telegramAPI.showAlert('📁 Бесплатный отчет открыт в браузере!\n\n' +
+                                    '💡 Браузер должен автоматически скачать файл.\n' +
+                                    'Если этого не произошло - проверьте папку "Загрузки".\n\n' +
+                                    '📄 Имя файла: prizma-report-' + telegramId + '.pdf');
+                            }
+                        } else {
+                            window.open(reportUrl, '_blank');
+                            $span.text('Отчет открыт!');
+                        }
+                    } else {
+                        safeShowAlert('Ошибка: доступен только премиум отчет');
+                        $span.text(originalText);
+                    }
+                } else {
+                    safeShowAlert('Отчет не готов. Попробуйте позже.');
+                    $span.text(originalText);
+                }
+            } catch (error) {
+                console.error('❌ Ошибка при скачивании бесплатного отчета:', error);
+                safeShowAlert('Ошибка при скачивании отчета. Попробуйте позже.');
+                $span.text(originalText);
+            } finally {
+                $button.removeClass('loading');
+            }
+        });
+
+        // Обработка кнопки "Выбрать способ оплаты" для премиум отчета
+        $('#startPremiumFromOffer').off('click').on('click', async function(e) {
+            e.preventDefault();
+            safeHapticFeedback('medium');
+
+            const $button = $(this);
+            const originalText = $button.html();
+
+            try {
+                $button.prop('disabled', true).html('Загрузка...');
+
+                const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/start-premium-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    console.log('✅ Платежная ссылка получена:', data.payment_link);
+                    safeHapticFeedback('light');
+                    // Перенаправляем пользователя на платежную страницу
+                    if (isInTelegramWebApp() && getTelegramAPI()?.openLink) {
+                        getTelegramAPI().openLink(data.payment_link);
+                        safeShowAlert('Открываем страницу оплаты. После оплаты вернитесь в это окно для получения отчета.');
+                    } else {
+                        window.location.href = data.payment_link;
+                    }
+                } else if (data.status === 'already_paid') {
+                    safeShowAlert(data.message);
+                    // Возможно, сразу перенаправить на страницу загрузки/скачивания отчета
+                    window.location.href = 'download.html'; 
+                } else {
+                    console.error('❌ Ошибка при получении платежной ссылки:', data.message || data.error);
+                    safeShowAlert('Не удалось сгенерировать ссылку на оплату: ' + (data.message || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('❌ Ошибка инициации платежа:', error);
+                safeShowAlert('Произошла ошибка при инициации платежа. Попробуйте позже.');
+            } finally {
+                $button.prop('disabled', false).html(originalText);
+            }
+        });
     }
 
     function initPaymentPage() {
@@ -1163,7 +1671,7 @@ $(function() {
     }
 
     function initDownloadPage() {
-        console.log('📁 Инициализация страницы скачивания...');
+        console.log('💎 Инициализация страницы скачивания ПРЕМИУМ отчета...');
         
         // Проверяем, была ли уже инициализирована эта страница
         if (window.downloadPageInitialized) {
@@ -1209,7 +1717,30 @@ $(function() {
                 // Тактильная обратная связь для Telegram
                 safeHapticFeedback('medium');
                 
-                const reportUrl = `${API_BASE_URL}/api/download/report/${telegramId}`;
+                // Проверяем статус отчетов для определения правильного URL
+                const reportsResponse = await fetch(`${API_BASE_URL}/api/user/${telegramId}/reports-status`);
+                const reportsData = await reportsResponse.json();
+                
+                let reportUrl;
+                if (reportsResponse.ok && reportsData.available_report && reportsData.available_report.status === 'ready') {
+                    const availableReport = reportsData.available_report;
+                    
+                    // Проверяем, что это премиум отчет (страница download.html только для премиум)
+                    if (availableReport.type === 'premium') {
+                        console.log(`💎 Скачиваем премиум отчет:`, availableReport.message);
+                        reportUrl = `${API_BASE_URL}${availableReport.download_url}`;
+                    } else {
+                        console.log('❌ На этой странице доступен только премиум отчет');
+                        $span.text('Только премиум отчет');
+                        safeShowAlert('На этой странице доступен только премиум отчет. Перейдите на страницу спецпредложения для бесплатного отчета.');
+                        return;
+                    }
+                } else {
+                    console.log('❌ Премиум отчет не готов или недоступен');
+                    $span.text('Премиум отчет не готов');
+                    safeShowAlert('Премиум отчет не готов. Попробуйте позже.');
+                    return;
+                }
                 
                 if (isInTelegramWebApp() && !fallback) {
                     // В Telegram Web App используем простую и надежную логику
@@ -1382,26 +1913,53 @@ $(function() {
             });
             
             // Прямая ссылка для крайних случаев
-            $('#downloadReportDirect').on('click', function(e) {
+            $('#downloadReportDirect').on('click', async function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
                 
                 const telegramId = getTelegramUserId();
-                const directUrl = `${API_BASE_URL}/api/download/report/${telegramId}?download=1&direct=1&t=${Date.now()}`;
                 
-                console.log('🖱️ Клик по прямой ссылке скачивания');
-                
-                // Используем правильный API
-                const telegramAPI = getTelegramAPI();
-                
-                if (isInTelegramWebApp() && telegramAPI && telegramAPI.openLink) {
-                    telegramAPI.openLink(directUrl);
-                    if (telegramAPI.showAlert) {
-                        telegramAPI.showAlert('📁 Файл открыт в браузере!\n\nИспользуйте меню браузера "Сохранить как..." для скачивания файла.');
+                try {
+                    // Проверяем статус отчетов для определения правильного URL
+                    const reportsResponse = await fetch(`${API_BASE_URL}/api/user/${telegramId}/reports-status`);
+                    const reportsData = await reportsResponse.json();
+                    
+                    let directUrl;
+                    if (reportsResponse.ok && reportsData.available_report && reportsData.available_report.status === 'ready') {
+                        const availableReport = reportsData.available_report;
+                        
+                        // Проверяем, что это премиум отчет
+                        if (availableReport.type === 'premium') {
+                            console.log(`💎 Прямое скачивание премиум отчета`);
+                            directUrl = `${API_BASE_URL}${availableReport.download_url}?download=1&direct=1&t=${Date.now()}`;
+                        } else {
+                            console.log('❌ На этой странице доступен только премиум отчет');
+                            safeShowAlert('На этой странице доступен только премиум отчет. Перейдите на страницу спецпредложения для бесплатного отчета.');
+                            return;
+                        }
+                    } else {
+                        console.log('❌ Премиум отчет не готов для прямого скачивания');
+                        safeShowAlert('Премиум отчет не готов. Попробуйте позже.');
+                        return;
                     }
-                } else {
-                    window.open(directUrl, '_blank');
+                    
+                    console.log('🖱️ Клик по прямой ссылке скачивания');
+                    
+                    // Используем правильный API
+                    const telegramAPI = getTelegramAPI();
+                    
+                    if (isInTelegramWebApp() && telegramAPI && telegramAPI.openLink) {
+                        telegramAPI.openLink(directUrl);
+                        if (telegramAPI.showAlert) {
+                            telegramAPI.showAlert('📁 Файл открыт в браузере!\n\nИспользуйте меню браузера "Сохранить как..." для скачивания файла.');
+                        }
+                    } else {
+                        window.open(directUrl, '_blank');
+                    }
+                } catch (error) {
+                    console.error('❌ Ошибка при прямом скачивании:', error);
+                    safeShowAlert('Ошибка при скачивании. Попробуйте позже.');
                 }
             });
         }
@@ -1428,11 +1986,34 @@ $(function() {
                             window.location.href = 'question.html';
                         }, 2000);
                     } else {
-                        console.log('✅ Тест завершен, отчет доступен');
+                        console.log('✅ Тест завершен, проверяем статус отчетов...');
                         
-                        // Обновляем информацию на странице если есть соответствующие элементы
-                        if ($('.answers-count').length) {
-                            $('.answers-count').text(data.progress.answered);
+                        // Проверяем статус отчетов
+                        const reportsResponse = await fetch(`${API_BASE_URL}/api/user/${telegramId}/reports-status`);
+                        const reportsData = await reportsResponse.json();
+                        
+                        if (reportsResponse.ok && reportsData.available_report) {
+                            const availableReport = reportsData.available_report;
+                            console.log('📄 Доступный отчет:', availableReport);
+                            
+                            // Обновляем информацию на странице если есть соответствующие элементы
+                            if ($('.answers-count').length) {
+                                $('.answers-count').text(data.progress.answered);
+                            }
+                            
+                            // Показываем информацию о типе отчета
+                            if (availableReport.type === 'premium') {
+                                console.log('💎 Премиум отчет доступен');
+                                // Можно добавить визуальное отображение типа отчета
+                            } else {
+                                console.log('🆓 Бесплатный отчет доступен, но эта страница только для премиум');
+                                safeShowAlert('На этой странице доступен только премиум отчет. Перейдите на страницу спецпредложения для бесплатного отчета.');
+                                setTimeout(() => {
+                                    window.location.href = 'price-offer.html';
+                                }, 2000);
+                            }
+                        } else {
+                            console.log('❌ Отчет не готов');
                         }
                     }
                 } else {

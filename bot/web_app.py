@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
 import decimal
+import time
 
 from bot.services.database_service import db_service
 from bot.config import BASE_DIR, PERPLEXITY_ENABLED, settings
@@ -15,7 +16,7 @@ from bot.models.api_models import (
 )
 from loguru import logger
 from bot.services.oplata import RobokassaService
-from bot.database.models import PaymentStatus
+from bot.database.models import PaymentStatus, ReportGenerationStatus
 
 # Путь к статическим файлам
 STATIC_DIR = BASE_DIR / "frontend"
@@ -67,7 +68,40 @@ async def get_current_question(telegram_id: int):
         
         # Если пользователь еще не начал тест, начинаем его
         if not user.current_question_id:
-            user = await db_service.start_test(telegram_id)
+            # Для оплаченных пользователей проверяем, есть ли уже ответы
+            if user.is_paid:
+                answers = await db_service.get_user_answers(telegram_id)
+                if answers:
+                    # Если есть ответы, находим следующий вопрос после последнего отвеченного
+                    # Получаем все вопросы, на которые пользователь ответил
+                    answered_questions = []
+                    for answer in answers:
+                        question = await db_service.get_question(answer.question_id)
+                        if question:
+                            answered_questions.append(question)
+                    
+                    if answered_questions:
+                        # Находим вопрос с максимальным order_number
+                        last_question = max(answered_questions, key=lambda x: x.order_number)
+                        
+                        if last_question:
+                            next_question = await db_service.get_next_question(last_question.id, user.is_paid)
+                            if next_question:
+                                # Обновляем текущий вопрос пользователя
+                                await update_user_current_question(telegram_id, next_question.id)
+                                user.current_question_id = next_question.id
+                            else:
+                                # Если следующего вопроса нет, тест завершен
+                                user.test_completed = True
+                                user.test_completed_at = datetime.utcnow()
+                                # Обновляем пользователя через сервис
+                                await db_service.complete_test(telegram_id)
+                        else:
+                            user = await db_service.start_test(telegram_id)
+                else:
+                    user = await db_service.start_test(telegram_id)
+            else:
+                user = await db_service.start_test(telegram_id)
         
         # Получаем текущий вопрос
         question = await db_service.get_question(user.current_question_id)
@@ -303,7 +337,7 @@ async def update_user_profile(telegram_id: int, profile_data: UserProfileUpdate)
         raise HTTPException(status_code=500, detail="Failed to update profile")
 
 # Обработчик ошибок
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 @app.exception_handler(404)
 async def not_found_handler(request, exc):
@@ -552,32 +586,25 @@ async def check_premium_report_status(telegram_id: int):
         if not user.test_completed:
             return {"status": "test_not_completed", "message": "Тест не завершен"}
         
-        # Ищем последний платный отчет пользователя
-        reports_dir = Path("reports")
-        pattern = f"prizma_premium_report_{telegram_id}_*.pdf"
+        # Получаем статус генерации из БД
+        status_info = await db_service.get_report_generation_status(telegram_id, "premium")
         
-        import glob
-        report_files = glob.glob(str(reports_dir / pattern))
-        
-        if report_files:
-            # Сортируем по timestamp в имени файла
-            def extract_timestamp(filepath):
-                filename = Path(filepath).name
-                parts = filename.split('_')
-                if len(parts) >= 5:
-                    try:
-                        date_part = parts[3]
-                        time_part = parts[4].replace('.pdf', '').replace('.txt', '')
-                        timestamp_str = f"{date_part}_{time_part}"
-                        return timestamp_str
-                    except:
-                        return "00000000_000000"
-                return "00000000_000000"
-                
-            latest_report = max(report_files, key=extract_timestamp)
-            return {"status": "ready", "message": "Платный отчет готов к скачиванию", "report_path": latest_report}
+        if status_info.get("status") == "completed" and status_info.get("report_path"):
+            return {
+                "status": "ready", 
+                "message": "Премиум отчет готов к скачиванию", 
+                "report_path": status_info["report_path"]
+            }
+        elif status_info.get("status") == "processing":
+            return {"status": "processing", "message": "Отчет генерируется..."}
+        elif status_info.get("status") == "failed":
+            return {
+                "status": "failed", 
+                "message": "Ошибка генерации отчета", 
+                "error": status_info.get("error", "Неизвестная ошибка")
+            }
         else:
-            return {"status": "not_ready", "message": "Платный отчет еще не готов"}
+            return {"status": "not_started", "message": "Генерация не запущена"}
             
     except Exception as e:
         logger.error(f"Error checking premium report status: {e}")
@@ -588,39 +615,56 @@ async def start_premium_payment(telegram_id: int):
     try:
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
-        if user.is_premium_paid:
+        if user.is_paid:
             return {"status": "already_paid", "message": "Вы уже оплатили премиум отчет."}
 
-        # Генерируем уникальный Invoice ID
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        invoice_id = f"premium_{telegram_id}_{timestamp}"
-        
         # Сумма оплаты (например, 1000 рублей)
-        amount_decimal = decimal.Decimal(1000.00) # Ваша цена за премиум отчет
+        amount_decimal = decimal.Decimal(1.00) # Ваша цена за премиум отчет
         amount_in_kopecks = int(amount_decimal * 100) # Преобразуем в копейки (целое число)
         description = f"Оплата премиум отчета для пользователя {telegram_id}"
-        
+
+        # 1. Сначала создаем запись о платеже (invoice_id временно уникальный timestamp)
+        temp_invoice_id = str(int(time.time() * 1_000_000))
+        payment = await db_service.create_payment(
+            user_id=user.id,
+            amount=amount_in_kopecks,
+            currency="RUB",
+            description=description,
+            invoice_id=temp_invoice_id,
+            status=PaymentStatus.PENDING
+        )
+
+        # 2. Получаем автоинкрементный ID платежа
+        inv_id = payment.id
+
+        # 3. Обновляем invoice_id в базе (если нужно)
+        await db_service.update_payment_invoice_id(payment.id, str(inv_id))
+
         robokassa = RobokassaService(
             merchant_login=settings.ROBOKASSA_LOGIN,
             merchant_password_1=settings.ROBOKASSA_PASSWORD_1,
-            merchant_password_2=settings.ROBOKASSA_PASSWORD_TEST # Использовать ROBOKASSA_PASSWORD_TEST
-        )
-        
-        payment_link = robokassa.generate_payment_link(
-            cost=amount_decimal,
-            number=invoice_id,
-            description=description,
-            is_test=1 if settings.ROBOKASSA_TEST else 0
+            merchant_password_2=settings.ROBOKASSA_PASSWORD_2,
+            is_test=settings.ROBOKASSA_TEST
         )
 
-        # Сохраняем информацию о платеже в БД
-        await db_service.create_payment(
-            user_id=user.id,
-            amount=amount_in_kopecks, # Используем сумму в копейках
-            currency="RUB",
+        # 4. Формируем URL для возврата в Telegram Web App
+        # Получаем базовый URL из настроек или определяем автоматически
+        base_url = getattr(settings, 'WEBAPP_URL', 'https://your-domain.com')
+        
+        # URL для успешного платежа - возвращаемся в приложение
+        success_url = f"{base_url}/api/robokassa/success"
+        
+        # URL для неуспешного платежа - возвращаемся в приложение с ошибкой
+        fail_url = f"{base_url}/api/robokassa/fail"
+
+        # 5. Генерируем ссылку Robokassa с URL возврата
+        payment_link = robokassa.generate_payment_link(
+            cost=amount_decimal,
+            number=inv_id,
             description=description,
-            invoice_id=invoice_id,
-            status=PaymentStatus.PENDING
+            is_test=1 if settings.ROBOKASSA_TEST else 0,
+            success_url=success_url,
+            fail_url=fail_url
         )
         
         logger.info(f"💰 Сгенерирована платежная ссылка для пользователя {telegram_id}: {payment_link}")
@@ -636,24 +680,20 @@ async def robokassa_result(request: Request):
     try:
         query_params = dict(request.query_params)
         logger.info(f"🔔 Получено уведомление ResultURL от Robokassa: {query_params}")
-        
-        # Извлекаем параметры из запроса
         out_sum = query_params.get('OutSum')
         inv_id = query_params.get('InvId')
         signature_value = query_params.get('SignatureValue')
-
         if not all([out_sum, inv_id, signature_value]):
             logger.warning("⚠️ Недостаточно параметров в ResultURL")
             return "bad sign"
-
         robokassa = RobokassaService(
             merchant_login=settings.ROBOKASSA_LOGIN,
             merchant_password_1=settings.ROBOKASSA_PASSWORD_1,
-            merchant_password_2=settings.ROBOKASSA_PASSWORD_TEST # Использовать ROBOKASSA_PASSWORD_TEST
+            merchant_password_2=settings.ROBOKASSA_PASSWORD_2,
+            is_test=1 if settings.ROBOKASSA_TEST else 0
         )
-
-        # Проверяем подпись
-        if not robokassa.check_signature_result(decimal.Decimal(out_sum), inv_id, signature_value, robokassa.merchant_password_2):
+        # Проверяем подпись для ResultURL
+        if not robokassa.check_signature_result(out_sum, inv_id, signature_value):
             logger.warning(f"❌ Неверная подпись в ResultURL для InvId: {inv_id}")
             return "bad sign"
 
@@ -663,7 +703,7 @@ async def robokassa_result(request: Request):
             await db_service.update_payment_status(payment.id, PaymentStatus.COMPLETED)
             user = await db_service.get_user_by_id(payment.user_id)
             if user:
-                await db_service.update_user_premium_status(user.telegram_id, True)
+                await db_service.upgrade_to_paid(user.telegram_id)
                 logger.info(f"✅ Платеж {inv_id} успешно завершен для пользователя {user.telegram_id}")
             return f"OK{inv_id}"
         else:
@@ -679,39 +719,50 @@ async def robokassa_success(request: Request):
     try:
         query_params = dict(request.query_params)
         logger.info(f"✅ Получено уведомление SuccessURL от Robokassa: {query_params}")
-
         out_sum = query_params.get('OutSum')
         inv_id = query_params.get('InvId')
         signature_value = query_params.get('SignatureValue')
-
         if not all([out_sum, inv_id, signature_value]):
             logger.warning("⚠️ Недостаточно параметров в SuccessURL")
-            # Перенаправляем на страницу ошибки или главную
             return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
-
-
         robokassa = RobokassaService(
             merchant_login=settings.ROBOKASSA_LOGIN,
             merchant_password_1=settings.ROBOKASSA_PASSWORD_1,
-            merchant_password_2=settings.ROBOKASSA_PASSWORD_TEST # Использовать ROBOKASSA_PASSWORD_TEST
+            merchant_password_2=settings.ROBOKASSA_PASSWORD_2,
+            is_test=settings.ROBOKASSA_TEST
         )
-
-        if not robokassa.check_signature_result(decimal.Decimal(out_sum), inv_id, signature_value, robokassa.merchant_password_1):
+        # Проверяем подпись для SuccessURL
+        if not robokassa.check_signature_success(out_sum, inv_id, signature_value):
             logger.warning(f"❌ Неверная подпись в SuccessURL для InvId: {inv_id}")
             return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
 
-        # Проверяем статус платежа в БД, чтобы убедиться, что он уже обработан ResultURL
+        # Проверяем статус платежа в БД
         payment = await db_service.get_payment_by_invoice_id(inv_id)
-        user_paid = False
-        if payment and payment.status == PaymentStatus.COMPLETED:
-            user_paid = True
-            logger.info(f"🎉 Платеж {inv_id} подтвержден через SuccessURL. Пользователь оплатил.")
+        if payment:
+            logger.info(f"💰 Найден платеж в БД: ID={payment.id}, статус={payment.status}, пользователь={payment.user_id}")
+            if payment.status == PaymentStatus.COMPLETED:
+                logger.info(f"🎉 Платеж {inv_id} подтвержден через SuccessURL. Пользователь оплатил.")
+                # Перенаправляем на страницу логина для премиум версии
+                return RedirectResponse(url="/login.html?premium=true", status_code=302)
+            else:
+                logger.warning(f"⚠️ Платеж {inv_id} найден, но статус не COMPLETED: {payment.status}")
+                # Попробуем обновить статус на COMPLETED (на случай если ResultURL не сработал)
+                await db_service.update_payment_status(payment.id, PaymentStatus.COMPLETED)
+                user = await db_service.get_user_by_id(payment.user_id)
+                if user:
+                    logger.info(f"👤 Найден пользователь: ID={user.id}, telegram_id={user.telegram_id}, is_paid={user.is_paid}")
+                    await db_service.upgrade_to_paid(user.telegram_id)
+                    logger.info(f"✅ Платеж {inv_id} обновлен до COMPLETED для пользователя {user.telegram_id}")
+                    # Проверяем, что статус обновился
+                    updated_user = await db_service.get_user_by_id(payment.user_id)
+                    logger.info(f"✅ Статус пользователя после обновления: is_paid={updated_user.is_paid}")
+                else:
+                    logger.error(f"❌ Пользователь с ID {payment.user_id} не найден")
+                # Перенаправляем на страницу логина для премиум версии
+                return RedirectResponse(url="/login.html?premium=true", status_code=302)
         else:
-            logger.warning(f"⚠️ Платеж {inv_id} не подтвержден через SuccessURL или статус не COMPLETED.")
+            logger.warning(f"⚠️ Платеж с InvId {inv_id} не найден в БД")
             return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
-
-        # Если все ок, перенаправляем на страницу с сообщением об успехе
-        return RedirectResponse(url="/complete-payment.html", status_code=302)
 
     except Exception as e:
         logger.error(f"❌ Ошибка обработки SuccessURL Robokassa: {e}")
@@ -725,8 +776,8 @@ async def robokassa_fail(request: Request):
 
 
 @app.post("/api/user/{telegram_id}/generate-premium-report", summary="Запустить генерацию платного отчета")
-async def start_premium_report_generation(telegram_id: int):
-    """Запустить генерацию платного отчета пользователя (50 вопросов)"""
+async def start_premium_report_generation(telegram_id: int, background_tasks: BackgroundTasks):
+    """Запустить асинхронную генерацию платного отчета пользователя (50 вопросов)"""
     try:
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
@@ -734,23 +785,35 @@ async def start_premium_report_generation(telegram_id: int):
             return {"status": "error", "message": "Тест не завершен"}
         
         # Проверяем, оплатил ли пользователь премиум отчет
-        if not user.is_premium_paid:
+        if not user.is_paid:
             logger.warning(f"⚠️ Пользователь {telegram_id} не оплатил премиум отчет. Перенаправляем на оплату.")
-            # Возвращаем статус, который фронтенд может интерпретировать для перенаправления на страницу оплаты
             return {"status": "payment_required", "message": "Для генерации премиум отчета требуется оплата."}
 
-        logger.info(f"🚀 Запускаем синхронную генерацию ПЛАТНОГО отчета для пользователя {telegram_id}")
+        # Проверяем, не генерируется ли уже отчет
+        if await db_service.is_report_generating(telegram_id, "premium"):
+            logger.info(f"⏳ Отчет уже генерируется для пользователя {telegram_id}")
+            return {"status": "already_processing", "message": "Отчет уже генерируется. Проверьте статус позже."}
+
+        # Обновляем статус в БД
+        await db_service.update_report_generation_status(
+            telegram_id, 
+            "premium", 
+            ReportGenerationStatus.PROCESSING
+        )
         
-        report_path = await generate_premium_report_background(telegram_id)
+        # Запускаем фоновую задачу
+        background_tasks.add_task(generate_premium_report_async, telegram_id)
         
-        if report_path:
-            return {"status": "success", "message": "Платный отчет успешно сгенерирован", "report_path": report_path}
-        else:
-            return {"status": "error", "message": "Ошибка при генерации платного отчета"}
+        logger.info(f"🚀 Запущена асинхронная генерация ПЛАТНОГО отчета для пользователя {telegram_id}")
+        
+        return {
+            "status": "started", 
+            "message": "Генерация премиум отчета запущена. Вы получите уведомление по готовности."
+        }
             
     except Exception as e:
         logger.error(f"Error starting premium report generation: {e}")
-        return {"status": "error", "message": f"Ошибка при генерации платного отчета: {str(e)}"}
+        return {"status": "error", "message": f"Ошибка при запуске генерации отчета: {str(e)}"}
 
 @app.get("/api/download/premium-report/{telegram_id}", summary="Скачать платный персональный отчет")
 async def download_premium_personal_report(telegram_id: int, download: Optional[str] = None, method: Optional[str] = None, t: Optional[str] = None):
@@ -850,7 +913,7 @@ async def download_premium_personal_report(telegram_id: int, download: Optional[
         logger.error(f"❌ Error downloading premium report: {e}")
         raise HTTPException(status_code=500, detail="Ошибка при скачивании платного отчета")
 
-# Функция фоновой генерации платного отчета
+# Функция фоновой генерации платного отчета (синхронная версия для обратной совместимости)
 async def generate_premium_report_background(telegram_id: int):
     """Генерация платного отчета в фоновом режиме после завершения теста (50 вопросов)"""
     try:
@@ -880,6 +943,167 @@ async def generate_premium_report_background(telegram_id: int):
     except Exception as e:
         logger.error(f"❌ Критическая ошибка фоновой генерации ПЛАТНОГО отчета для пользователя {telegram_id}: {e}")
         return None
+
+# Асинхронная функция генерации отчета для Background Tasks
+async def generate_premium_report_async(telegram_id: int):
+    """Асинхронная генерация премиум отчета в фоновом режиме"""
+    try:
+        logger.info(f"🔄 Начинаем асинхронную генерацию ПЛАТНОГО отчета для пользователя {telegram_id}")
+        
+        # Получаем пользователя
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        # Получаем ответы и вопросы
+        answers = await db_service.get_user_answers(telegram_id)
+        questions = await db_service.get_questions()
+        
+        # Генерируем платный отчет через AI сервис
+        from bot.services.perplexity import AIAnalysisService
+        ai_service = AIAnalysisService()
+        
+        result = await ai_service.generate_premium_report(user, questions, answers)
+        
+        if result.get("success"):
+            report_path = result['report_file']
+            
+            # Обновляем статус в БД
+            await db_service.update_report_generation_status(
+                telegram_id, 
+                "premium", 
+                ReportGenerationStatus.COMPLETED, 
+                report_path=report_path
+            )
+            
+            logger.info(f"✅ Асинхронная генерация ПЛАТНОГО отчета завершена успешно для пользователя {telegram_id}: {report_path}")
+            
+        else:
+            error_msg = result.get('error', 'Неизвестная ошибка')
+            
+            # Обновляем статус в БД
+            await db_service.update_report_generation_status(
+                telegram_id, 
+                "premium", 
+                ReportGenerationStatus.FAILED, 
+                error=error_msg
+            )
+            
+            logger.error(f"❌ Ошибка асинхронной генерации ПЛАТНОГО отчета для пользователя {telegram_id}: {error_msg}")
+            
+    except Exception as e:
+        # Обновляем статус в БД
+        await db_service.update_report_generation_status(
+            telegram_id, 
+            "premium", 
+            ReportGenerationStatus.FAILED, 
+            error=str(e)
+        )
+        
+        logger.error(f"❌ Критическая ошибка асинхронной генерации ПЛАТНОГО отчета для пользователя {telegram_id}: {e}")
+
+@app.get("/api/user/{telegram_id}/reports-status", summary="Проверить статус всех отчетов пользователя")
+async def check_user_reports_status(telegram_id: int):
+    """Проверить статус всех отчетов пользователя и определить какой доступен для скачивания"""
+    try:
+        logger.info(f"🔍 Проверка статуса отчетов для пользователя {telegram_id}")
+        
+        # Получаем пользователя
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        if not user.test_completed:
+            return {
+                "status": "test_not_completed", 
+                "message": "Тест не завершен",
+                "available_report": None
+            }
+        
+        # Проверяем статус бесплатного отчета
+        free_report_status = await check_report_status(telegram_id)
+        
+        # Проверяем статус премиум отчета
+        premium_report_status = await check_premium_report_status(telegram_id)
+        
+        logger.info(f"📊 Статус бесплатного отчета: {free_report_status.get('status')}")
+        logger.info(f"📊 Статус премиум отчета: {premium_report_status.get('status')}")
+        logger.info(f"💰 Пользователь оплатил: {user.is_paid}")
+        
+        # Определяем какой отчет доступен для скачивания
+        available_report = None
+        
+        if user.is_paid and premium_report_status.get('status') == 'ready':
+            # Если пользователь оплатил и премиум отчет готов
+            available_report = {
+                "type": "premium",
+                "status": "ready",
+                "message": "Премиум отчет готов к скачиванию",
+                "download_url": f"/api/download/premium-report/{telegram_id}"
+            }
+        elif free_report_status.get('status') == 'ready':
+            # Если бесплатный отчет готов (всегда доступен)
+            available_report = {
+                "type": "free",
+                "status": "ready", 
+                "message": "Бесплатный отчет готов к скачиванию",
+                "download_url": f"/api/download/report/{telegram_id}"
+            }
+        elif user.is_paid and premium_report_status.get('status') == 'processing':
+            # Если премиум отчет в процессе генерации
+            available_report = {
+                "type": "premium",
+                "status": "processing",
+                "message": "Премиум отчет генерируется..."
+            }
+        elif free_report_status.get('status') == 'processing':
+            # Если бесплатный отчет в процессе генерации
+            available_report = {
+                "type": "free",
+                "status": "processing",
+                "message": "Бесплатный отчет генерируется..."
+            }
+        elif user.is_paid and premium_report_status.get('status') == 'failed':
+            # Если премиум отчет не удалось сгенерировать, но есть бесплатный
+            if free_report_status.get('status') == 'ready':
+                available_report = {
+                    "type": "free",
+                    "status": "ready",
+                    "message": "Премиум отчет недоступен, но бесплатный отчет готов",
+                    "download_url": f"/api/download/report/{telegram_id}",
+                    "fallback": True
+                }
+            else:
+                available_report = {
+                    "type": "premium",
+                    "status": "failed",
+                    "message": "Ошибка генерации премиум отчета",
+                    "error": premium_report_status.get('error', 'Неизвестная ошибка')
+                }
+        elif free_report_status.get('status') == 'failed':
+            # Если бесплатный отчет не удалось сгенерировать
+            available_report = {
+                "type": "free",
+                "status": "failed",
+                "message": "Ошибка генерации бесплатного отчета",
+                "error": free_report_status.get('error', 'Неизвестная ошибка')
+            }
+        
+        return {
+            "status": "success",
+            "user": {
+                "telegram_id": user.telegram_id,
+                "is_paid": user.is_paid,
+                "test_completed": user.test_completed
+            },
+            "free_report": free_report_status,
+            "premium_report": premium_report_status,
+            "available_report": available_report
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error checking user reports status: {e}")
+        return {
+            "status": "error", 
+            "message": "Ошибка при проверке статуса отчетов",
+            "available_report": None
+        }
 
 # Подключение статических файлов в конце (после всех API маршрутов)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

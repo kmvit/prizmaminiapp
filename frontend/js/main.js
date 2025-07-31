@@ -1,15 +1,13 @@
 'use strict';
-// Этот файл используется только для браузерной версии (не Telegram)
-// Основная логика для Telegram в main-telegram.js
 $(function() {
     // Исходные стили
     const closedStyle = {
-        borderRadius: "25px",
-        borderBottomLeftRadius: "25px",
-        borderBottomRightRadius: "25px"
+        borderRadius: "10px",
+        borderBottomLeftRadius: "10px",
+        borderBottomRightRadius: "10px"
     };
     const openedStyle = {
-        borderRadius: "25px 25px 0 0",
+        borderRadius: "10px 10px 0 0",
         borderBottomLeftRadius: "0",
         borderBottomRightRadius: "0"
     };

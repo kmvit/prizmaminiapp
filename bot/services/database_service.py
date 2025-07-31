@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 from datetime import datetime
 import decimal
 
-from bot.database.models import User, Question, Answer, Payment, Report, QuestionType, PaymentStatus
+from bot.database.models import User, Question, Answer, Payment, Report, QuestionType, PaymentStatus, ReportGenerationStatus
 from bot.database.database import async_session
 from bot.config import FREE_QUESTIONS_LIMIT
 
@@ -41,6 +41,13 @@ class DatabaseService:
             
             return user
     
+    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+        """Получить пользователя по ID"""
+        async with async_session() as session:
+            stmt = select(User).where(User.id == user_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+    
     async def update_user_profile(self, telegram_id: int, name: str = None, age: int = None, gender: str = None) -> User:
         """Обновить профиль пользователя"""
         async with async_session() as session:
@@ -66,8 +73,8 @@ class DatabaseService:
             result = await session.execute(stmt)
             user = result.scalar_one()
             
-            # Если пользователь уже проходил тест - удаляем старые ответы
-            if user.test_completed or user.current_question_id:
+            # Если пользователь уже проходил тест и НЕ является премиум - удаляем старые ответы
+            if (user.test_completed or user.current_question_id) and not user.is_paid:
                 deleted_count = await self.clear_user_answers(telegram_id)
                 from loguru import logger
                 logger.info(f"🗑️ Удалено {deleted_count} старых ответов для пользователя {telegram_id}")
@@ -309,6 +316,16 @@ class DatabaseService:
             await session.commit()
             return payment
     
+    async def update_payment_invoice_id(self, payment_id: int, invoice_id: str):
+        from bot.database.database import async_session
+        from bot.database.models import Payment
+        from sqlalchemy import update as sql_update
+
+        async with async_session() as session:
+            stmt = sql_update(Payment).where(Payment.id == payment_id).values(invoice_id=invoice_id)
+            await session.execute(stmt)
+            await session.commit()
+    
     # --- Работа с отчетами ---
     
     async def create_report(self, telegram_id: int, content: str, summary: str = None) -> Report:
@@ -342,11 +359,76 @@ class DatabaseService:
             if pdf_file_id:
                 report.pdf_file_id = pdf_file_id
             
-            report.generation_status = "completed"
-            report.generated_at = datetime.utcnow()
-            
             await session.commit()
             return report
+    
+    # --- Методы для работы со статусом генерации отчетов ---
+    
+    async def update_report_generation_status(self, telegram_id: int, report_type: str, 
+                                            status: ReportGenerationStatus, 
+                                            report_path: str = None, 
+                                            error: str = None) -> User:
+        """Обновить статус генерации отчета"""
+        async with async_session() as session:
+            stmt = select(User).where(User.telegram_id == telegram_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one()
+            
+            if report_type == "free":
+                user.free_report_status = status
+                if report_path:
+                    user.free_report_path = report_path
+            elif report_type == "premium":
+                user.premium_report_status = status
+                if report_path:
+                    user.premium_report_path = report_path
+            
+            if error:
+                user.report_generation_error = error
+            
+            # Обновляем временные метки
+            if status == ReportGenerationStatus.PROCESSING:
+                user.report_generation_started_at = datetime.utcnow()
+            elif status in [ReportGenerationStatus.COMPLETED, ReportGenerationStatus.FAILED]:
+                user.report_generation_completed_at = datetime.utcnow()
+            
+            user.updated_at = datetime.utcnow()
+            await session.commit()
+            return user
+    
+    async def get_report_generation_status(self, telegram_id: int, report_type: str) -> dict:
+        """Получить статус генерации отчета"""
+        async with async_session() as session:
+            stmt = select(User).where(User.telegram_id == telegram_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                return {"status": "user_not_found"}
+            
+            if report_type == "free":
+                return {
+                    "status": user.free_report_status.value,
+                    "report_path": user.free_report_path,
+                    "error": user.report_generation_error,
+                    "started_at": user.report_generation_started_at,
+                    "completed_at": user.report_generation_completed_at
+                }
+            elif report_type == "premium":
+                return {
+                    "status": user.premium_report_status.value,
+                    "report_path": user.premium_report_path,
+                    "error": user.report_generation_error,
+                    "started_at": user.report_generation_started_at,
+                    "completed_at": user.report_generation_completed_at
+                }
+            
+            return {"status": "invalid_report_type"}
+    
+    async def is_report_generating(self, telegram_id: int, report_type: str) -> bool:
+        """Проверить, генерируется ли отчет"""
+        status_info = await self.get_report_generation_status(telegram_id, report_type)
+        return status_info.get("status") == ReportGenerationStatus.PROCESSING.value
 
 # Создаем экземпляр сервиса
 db_service = DatabaseService() 

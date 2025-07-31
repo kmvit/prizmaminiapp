@@ -16,6 +16,12 @@ class PaymentStatus(Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
 
+class ReportGenerationStatus(Enum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
 class User(Base):
     __tablename__ = "users"
     
@@ -38,11 +44,24 @@ class User(Base):
     current_question_id = Column(Integer, ForeignKey("questions.id"), nullable=True)
     test_completed = Column(Boolean, default=False)
     
+    # Статусы генерации отчетов
+    free_report_status = Column(SQLEnum(ReportGenerationStatus), default=ReportGenerationStatus.PENDING)
+    premium_report_status = Column(SQLEnum(ReportGenerationStatus), default=ReportGenerationStatus.PENDING)
+    
+    # Пути к готовым отчетам
+    free_report_path = Column(String(500), nullable=True)
+    premium_report_path = Column(String(500), nullable=True)
+    
+    # Ошибки генерации
+    report_generation_error = Column(Text, nullable=True)
+    
     # Временные метки
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     test_started_at = Column(DateTime, nullable=True)
     test_completed_at = Column(DateTime, nullable=True)
+    report_generation_started_at = Column(DateTime, nullable=True)
+    report_generation_completed_at = Column(DateTime, nullable=True)
     
     # Связи
     answers = relationship("Answer", back_populates="user")
