@@ -242,6 +242,24 @@ $(function() {
     // Запуск инициализации с защитой от двойного вызова
     let appInitialized = false;
     
+    // Проверка параметра startapp при запуске
+    function checkStartApp() {
+        try {
+            const startParam = window.Telegram.WebApp.initDataUnsafe.start_param;
+            if (startParam) {
+                console.log('🚀 Обнаружен параметр запуска:', startParam);
+                
+                if (startParam === 'payment_success') {
+                    window.location.href = 'complete-payment.html';
+                } else if (startParam === 'payment_fail') {
+                    window.location.href = 'uncomplete-payment.html';
+                }
+            }
+        } catch (e) {
+            console.log('Параметр запуска не найден или ошибка:', e);
+        }
+    }
+
     function safeInitTelegramApp() {
         if (appInitialized) {
             console.log('⚠️ TelegramApp уже инициализирован, пропускаем повторную инициализацию');
@@ -249,6 +267,7 @@ $(function() {
         }
         appInitialized = true;
         console.log('🚀 Инициализируем TelegramApp (первый раз)');
+        checkStartApp(); // Проверяем параметр запуска
         initTelegramApp();
     }
     

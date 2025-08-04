@@ -35,6 +35,7 @@ FREE_QUESTIONS_LIMIT = int(os.getenv("FREE_QUESTIONS_LIMIT", "10"))  # Коли�
 class Settings(BaseSettings):
     # BOT_TOKEN: str  # Не нужен для веб-приложения
     WEBAPP_URL: str = "https://your-domain.com"  # URL вашего веб-приложения
+    TELEGRAM_WEBAPP_URL: str = "https://t.me/myprizma_bot/psy" # URL вашего Telegram Web App
     DATABASE_URL: str
     PERPLEXITY_API_KEY: str = ""  # Делаем необязательным
     PERPLEXITY_MODEL: str = "sonar"  # Модель по умолчанию
