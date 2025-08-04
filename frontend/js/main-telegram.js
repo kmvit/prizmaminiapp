@@ -260,6 +260,29 @@ $(function() {
             console.log('Параметр запуска не найден или ошибка:', e);
         }
     }
+    
+    // Дополнительная проверка параметра startapp при загрузке страницы
+    function checkStartParamOnLoad() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const startParam = urlParams.get('startapp');
+            if (startParam) {
+                console.log('🚀 Обнаружен параметр startapp в URL:', startParam);
+                
+                // Проверяем успешную оплату (с ID или без)
+                if (startParam === 'payment_success' || startParam.startsWith('payment_success_')) {
+                    console.log('✅ Успешная оплата! Перенаправление на продолжение опроса');
+                    // После оплаты сразу перенаправляем на вопросы для продолжения опроса
+                    window.location.href = 'question.html';
+                } else if (startParam === 'payment_fail') {
+                    console.log('❌ Перенаправление на страницу неуспешной оплаты');
+                    window.location.href = 'uncomplete-payment.html';
+                }
+            }
+        } catch (e) {
+            console.log('Параметр startapp в URL не найден или ошибка:', e);
+        }
+    }
 
     // Проверка статуса оплаты из localStorage (для возврата из внешнего окна оплаты)
     function checkPaymentStatus() {
@@ -332,6 +355,7 @@ $(function() {
         appInitialized = true;
         console.log('🚀 Инициализируем TelegramApp (первый раз)');
         checkStartApp(); // Проверяем параметр запуска
+        checkStartParamOnLoad(); // Проверяем параметр startapp в URL
         checkPaymentStatus(); // Проверяем статус оплаты из localStorage
         startPaymentStatusMonitoring(); // Запускаем периодическую проверку
         initTelegramApp();
@@ -1597,6 +1621,78 @@ $(function() {
 
         // Получаем Telegram ID пользователя
         const telegramId = getTelegramUserId();
+
+        // Проверяем статус оплаты при загрузке страницы
+        async function checkPaymentStatusOnLoad() {
+            try {
+                console.log('🔍 Проверяем статус оплаты на странице price...');
+                const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/progress`);
+                const data = await response.json();
+                
+                if (response.ok && data.user) {
+                    console.log('👤 Статус пользователя:', data.user);
+                    
+                    // Если пользователь оплатил, перенаправляем на вопросы
+                    if (data.user.is_paid) {
+                        console.log('💎 Пользователь оплатил! Перенаправляем на вопросы для продолжения опроса.');
+                        window.location.href = 'question.html';
+                        return;
+                    }
+                } else {
+                    console.error('❌ Ошибка получения статуса пользователя:', data);
+                }
+            } catch (error) {
+                console.error('💥 Ошибка проверки статуса оплаты:', error);
+            }
+        }
+        
+        // Запускаем проверку статуса оплаты
+        checkPaymentStatusOnLoad();
+        
+        // Дополнительная проверка при получении фокуса окном (возврат из внешней оплаты)
+        window.addEventListener('focus', function() {
+            console.log('👀 Окно получило фокус на странице price, проверяем статус оплаты');
+            checkPaymentStatusOnLoad();
+        });
+        
+        // Проверка при показе страницы (например, при переключении вкладок)
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                console.log('👁️ Страница price стала видимой, проверяем статус оплаты');
+                checkPaymentStatusOnLoad();
+            }
+        });
+        
+        // Запускаем периодическую проверку статуса оплаты (каждые 5 секунд в течение 2 минут)
+        let paymentCheckCount = 0;
+        const maxPaymentChecks = 24; // 24 проверки * 5 сек = 2 минуты
+        
+        const paymentCheckInterval = setInterval(() => {
+            paymentCheckCount++;
+            
+            try {
+                // Проверяем статус оплаты
+                checkPaymentStatusOnLoad();
+            } catch (e) {
+                console.log('Ошибка периодической проверки оплаты:', e);
+            }
+            
+            // Останавливаем проверку через 2 минуты
+            if (paymentCheckCount >= maxPaymentChecks) {
+                console.log('⏰ Завершение периодической проверки статуса оплаты на странице price');
+                clearInterval(paymentCheckInterval);
+            }
+        }, 5000);
+        
+        // Сохраняем интервал для возможной очистки
+        window.pricePaymentCheckInterval = paymentCheckInterval;
+        
+        // Очищаем интервал при уходе со страницы
+        window.addEventListener('beforeunload', function() {
+            if (window.pricePaymentCheckInterval) {
+                clearInterval(window.pricePaymentCheckInterval);
+            }
+        });
 
         // Обработка кнопки "Выбрать способ оплаты" для премиум отчета
         $('#startPremiumPayment').off('click').on('click', async function(e) {
