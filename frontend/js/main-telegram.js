@@ -251,8 +251,9 @@ $(function() {
                 
                 // Проверяем успешную оплату (с ID или без)
                 if (startParam === 'payment_success' || startParam.startsWith('payment_success_')) {
-                    console.log('✅ Перенаправление на страницу успешной оплаты');
-                    window.location.href = 'complete-payment.html';
+                    console.log('✅ Успешная оплата! Перенаправление на продолжение опроса');
+                    // После оплаты сразу перенаправляем на вопросы для продолжения опроса
+                    window.location.href = 'question.html';
                 } else if (startParam === 'payment_fail') {
                     console.log('❌ Перенаправление на страницу неуспешной оплаты');
                     window.location.href = 'uncomplete-payment.html';
