@@ -32,7 +32,15 @@ class RobokassaService:
         # OutSum обязательно строка с двумя знаками после запятой!
         out_sum_str = "{:.2f}".format(float(out_sum)) if not isinstance(out_sum, str) else out_sum
         signature = self.calculate_signature(out_sum_str, inv_id, self.merchant_password_2)
-        return signature.lower() == received_signature.lower()
+        print(f"[Robokassa] Проверка подписи ResultURL:")
+        print(f"[Robokassa] out_sum_str: {out_sum_str}")
+        print(f"[Robokassa] inv_id: {inv_id}")
+        print(f"[Robokassa] received_signature: {received_signature}")
+        print(f"[Robokassa] calculated_signature: {signature}")
+        print(f"[Robokassa] password2: {self.merchant_password_2}")
+        result = signature.lower() == received_signature.lower()
+        print(f"[Robokassa] Подписи совпадают: {result}")
+        return result
 
     def generate_payment_link(
         self,

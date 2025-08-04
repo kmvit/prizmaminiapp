@@ -647,14 +647,16 @@ async def start_premium_payment(telegram_id: int):
             is_test=1 if settings.ROBOKASSA_TEST else 0
         )
 
-        # 4. Формируем URL для возврата на веб-страницы
+        # 4. Формируем URL для возврата в Telegram Web App
         base_url = settings.WEBAPP_URL
         
-        # URL для успешного платежа - возвращаем на веб-страницу
-        success_url = f"{base_url}/complete-payment.html?payment_id={inv_id}&status=success"
+        # URL для успешного платежа - возвращаем в Telegram Web App с параметром успеха
+        telegram_success_url = f"{settings.TELEGRAM_WEBAPP_URL}?startapp=payment_success_{inv_id}"
+        success_url = telegram_success_url
         
-        # URL для неуспешного платежа - возвращаем на веб-страницу
-        fail_url = f"{base_url}/uncomplete-payment.html"
+        # URL для неуспешного платежа - возвращаем в Telegram Web App с параметром ошибки
+        telegram_fail_url = f"{settings.TELEGRAM_WEBAPP_URL}?startapp=payment_fail"
+        fail_url = telegram_fail_url
         
         logger.info(f"🔗 SuccessURL: {success_url}")
         logger.info(f"🔗 FailURL: {fail_url}")
@@ -679,11 +681,11 @@ async def start_premium_payment(telegram_id: int):
 
 @app.get("/api/payment/fail-redirect", summary="Обработка неудачной оплаты и редирект")
 async def handle_payment_fail(request: Request):
-    """Перенаправляет пользователя на страницу неудачной оплаты."""
+    """Перенаправляет пользователя обратно в Web App в случае неудачной оплаты."""
     try:
-        fail_url = f"{settings.WEBAPP_URL}/uncomplete-payment.html"
-        logger.info(f"❌ Неудачная оплата. Перенаправляем на: {fail_url}")
-        return RedirectResponse(url=fail_url, status_code=302)
+        telegram_webapp_url = f"{settings.TELEGRAM_WEBAPP_URL}?startapp=payment_fail"
+        logger.info(f"❌ Неудачная оплата. Перенаправляем на: {telegram_webapp_url}")
+        return RedirectResponse(url=telegram_webapp_url, status_code=302)
     except Exception as e:
         logger.error(f"❌ Ошибка при обработке неудачной оплаты: {e}")
         # В крайнем случае, можно перенаправить на статичную страницу ошибки
@@ -711,17 +713,17 @@ async def handle_payment_success(invoice_id: int, request: Request):
             if user:
                 await db_service.upgrade_to_paid(user.telegram_id)
 
-        # Формируем URL для возврата на веб-страницу
-        success_url = f"{settings.WEBAPP_URL}/complete-payment.html?payment_id={invoice_id}&status=success"
+        # Формируем URL для возврата в Web App
+        telegram_webapp_url = f"{settings.TELEGRAM_WEBAPP_URL}?startapp=payment_success"
         
-        logger.info(f"✅ Успешная оплата. Перенаправляем на: {success_url}")
+        logger.info(f"✅ Успешная оплата. Перенаправляем на: {telegram_webapp_url}")
         
-        return RedirectResponse(url=success_url, status_code=302)
+        return RedirectResponse(url=telegram_webapp_url, status_code=302)
 
     except Exception as e:
         logger.error(f"❌ Ошибка при обработке успешной оплаты: {e}")
         # В случае ошибки, перенаправляем на страницу ошибки
-        fail_url = f"{settings.WEBAPP_URL}/uncomplete-payment.html"
+        fail_url = f"{settings.TELEGRAM_WEBAPP_URL}?startapp=payment_fail"
         return RedirectResponse(url=fail_url, status_code=302)
 
 @app.get("/api/robokassa/result", summary="Endpoint для ResultURL Robokassa")
@@ -742,7 +744,10 @@ async def robokassa_result(request: Request):
             is_test=1 if settings.ROBOKASSA_TEST else 0
         )
         # Проверяем подпись для ResultURL
-        if not robokassa.check_signature_result(out_sum, inv_id, signature_value):
+        logger.info(f"🔍 Проверка подписи ResultURL: out_sum={out_sum}, inv_id={inv_id}, signature_value={signature_value}")
+        signature_valid = robokassa.check_signature_result(out_sum, inv_id, signature_value)
+        logger.info(f"🔍 Результат проверки подписи: {signature_valid}")
+        if not signature_valid:
             logger.warning(f"❌ Неверная подпись в ResultURL для InvId: {inv_id}")
             return "bad sign"
 
@@ -862,9 +867,9 @@ async def robokassa_success(request: Request):
                 
                 # Добавляем запрос в кэш обработанных
                 _processed_success_requests.add(request_key)
-                # Перенаправляем на страницу успешного платежа
+                # Перенаправляем на страницу успешного платежа через API endpoint
                 logger.info(f"🔄 Перенаправляем пользователя на страницу успешного платежа")
-                response = RedirectResponse(url="/complete-payment.html", status_code=302)
+                response = RedirectResponse(url="/api/payment/success", status_code=302)
                 # Добавляем заголовки для предотвращения кэширования
                 response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
                 response.headers["Pragma"] = "no-cache"

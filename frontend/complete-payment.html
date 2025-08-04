@@ -40,117 +40,50 @@
 $(document).ready(function() {
     console.log('💳 Инициализация страницы успешной оплаты...');
     
-            // Проверяем параметры URL для определения статуса оплаты
-        const urlParams = new URLSearchParams(window.location.search);
-        const paymentStatus = urlParams.get('status');
-        const paymentId = urlParams.get('payment_id');
+    // Проверяем, загружена ли страница в Telegram Web App
+    const isInTelegram = window.Telegram && window.Telegram.WebApp && 
+                        window.Telegram.WebApp.platform !== 'unknown';
+    
+    console.log('📱 Находимся в Telegram Web App:', isInTelegram);
+    
+    if (isInTelegram) {
+        // Если мы уже в Telegram Web App, просто перенаправляем на вопросы
+        console.log('✅ Уже в Telegram Web App, перенаправляем на вопросы');
+        setTimeout(function() {
+            window.location.href = 'question.html';
+        }, 2000);
         
-        console.log('📊 Статус оплаты:', paymentStatus);
-        console.log('🆔 ID оплаты:', paymentId);
+    } else {
+        // Если в браузере (возврат с Робокассы) - просто закрываем окно через 3 секунды
+        console.log('🌐 Возврат с Робокассы, закрываем окно через 3 секунды');
         
-        // Проверяем, загружена ли страница в Telegram Web App
-        const isInTelegram = window.Telegram && window.Telegram.WebApp && 
-                            window.Telegram.WebApp.platform !== 'unknown';
+        // Показываем кнопку для ручного закрытия
+        $('#returnToTelegram').show();
         
-        console.log('📱 Находимся в Telegram Web App:', isInTelegram);
+        // Автоматически закрываем окно через 3 секунды
+        setTimeout(function() {
+            console.log('🔒 Закрытие окна оплаты...');
+            window.close();
+        }, 3000);
         
-        if (isInTelegram) {
-            // Если мы уже в Telegram Web App, просто перенаправляем на вопросы
-            console.log('✅ Уже в Telegram Web App, перенаправляем на вопросы');
-            setTimeout(function() {
-                window.location.href = 'question.html';
-            }, 2000);
-            
-        } else {
-            // Если в браузере (возврат с Робокассы)
-            console.log('🌐 Возврат с Робокассы, готовимся к возврату в Telegram Web App');
-            
-            // Показываем кнопку для ручного возврата
-            $('#returnToTelegram').show();
-            
-            // Сохраняем информацию об успешной оплате
-            localStorage.setItem('payment_completed', Date.now().toString());
-            localStorage.setItem('payment_success', 'true');
-            localStorage.setItem('payment_amount', '4980');
-            
-            if (paymentId) {
-                localStorage.setItem('payment_id', paymentId);
+        // Обработчик для ручного закрытия
+        $('#returnToTelegram').click(function(e) {
+            e.preventDefault();
+            console.log('👆 Ручное закрытие окна оплаты');
+            window.close();
+        });
+        
+        // Обратный отсчет
+        let countdown = 3;
+        const updateCountdown = function() {
+            if (countdown > 0) {
+                $('.payment-subtitle').text(`Возвращаемся в приложение через ${countdown}с...`);
+                countdown--;
+                setTimeout(updateCountdown, 1000);
             }
-            
-            // Пытаемся автоматически закрыть окно через 3 секунды
-            setTimeout(function() {
-                console.log('🔒 Автоматическое закрытие окна оплаты...');
-                
-                // Пытаемся использовать различные методы закрытия
-                let windowClosed = false;
-                
-                // Метод 1: Telegram Web App API
-                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.close) {
-                    try {
-                        window.Telegram.WebApp.close();
-                        windowClosed = true;
-                        console.log('✅ Окно закрыто через Telegram.WebApp.close');
-                    } catch (e) {
-                        console.log('⚠️ Не удалось закрыть через Telegram.WebApp.close');
-                    }
-                }
-                
-                // Метод 2: Альтернативный Telegram API
-                if (!windowClosed && window.TelegramWebApp && window.TelegramWebApp.close) {
-                    try {
-                        window.TelegramWebApp.close();
-                        windowClosed = true;
-                        console.log('✅ Окно закрыто через TelegramWebApp.close');
-                    } catch (e) {
-                        console.log('⚠️ Не удалось закрыть через TelegramWebApp.close');
-                    }
-                }
-                
-                // Метод 3: Стандартное закрытие окна
-                if (!windowClosed) {
-                    try {
-                        window.close();
-                        windowClosed = true;
-                        console.log('✅ Окно закрыто через window.close');
-                    } catch (e) {
-                        console.log('⚠️ Не удалось закрыть через window.close');
-                    }
-                }
-                
-                // Если ничего не сработало, показываем инструкцию
-                if (!windowClosed) {
-                    console.log('⚠️ Не удалось автоматически закрыть окно');
-                    $('.payment-subtitle').text('Пожалуйста, закройте это окно и вернитесь в приложение');
-                    $('#returnToTelegram').show();
-                }
-            }, 3000);
-            
-            // Обработчик для ручного закрытия
-            $('#returnToTelegram').click(function(e) {
-                e.preventDefault();
-                console.log('👆 Ручное закрытие окна оплаты');
-                
-                // Пытаемся закрыть окно всеми доступными способами
-                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.close) {
-                    window.Telegram.WebApp.close();
-                } else if (window.TelegramWebApp && window.TelegramWebApp.close) {
-                    window.TelegramWebApp.close();
-                } else {
-                    window.close();
-                }
-            });
-            
-            // Обратный отсчет
-            let countdown = 3;
-            const updateCountdown = function() {
-                if (countdown > 0) {
-                    $('.payment-subtitle').text(`Возвращаемся в приложение через ${countdown}с...`);
-                    countdown--;
-                    setTimeout(updateCountdown, 1000);
-                }
-            };
-            updateCountdown();
-        }
+        };
+        updateCountdown();
+    }
 });
 </script>
 </body>
