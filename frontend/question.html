@@ -8,6 +8,22 @@
     <title>PRIZMA</title>
     <link rel="stylesheet" href="css/main.css">
     <script src="js/telegram-vanilla.js"></script>
+    <script>
+        // Проверка среды выполнения
+        (function() {
+            // Если страница открыта в браузере, а не в Telegram Web App
+            if (!window.Telegram || !window.Telegram.WebApp) {
+                // Попытка открыть в Telegram Web App
+                const currentUrl = window.location.href;
+                const telegramUrl = `https://t.me/your_bot_username?start=questions`;
+                
+                // Показываем сообщение пользователю
+                if (confirm('Эта страница должна открываться в Telegram. Открыть в Telegram?')) {
+                    window.location.href = telegramUrl;
+                }
+            }
+        })();
+    </script>
 </head>
 <body class="bodyQuestion">
 

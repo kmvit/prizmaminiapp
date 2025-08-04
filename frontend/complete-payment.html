@@ -10,6 +10,22 @@
     <meta http-equiv="Expires" content="0">
     <title>PRIZMA</title>
     <link rel="stylesheet" href="css/main.css">
+    <script>
+        // Проверка среды выполнения
+        (function() {
+            // Если страница открыта в браузере, а не в Telegram Web App
+            if (!window.Telegram || !window.Telegram.WebApp) {
+                // Попытка открыть в Telegram Web App
+                const currentUrl = window.location.href;
+                const telegramUrl = `https://t.me/myprizma_bot?start=complete_payment`;
+                
+                // Показываем сообщение пользователю
+                if (confirm('Эта страница должна открываться в Telegram. Открыть в Telegram?')) {
+                    window.location.href = telegramUrl;
+                }
+            }
+        })();
+    </script>
 </head>
 <body class="bodyPayment">
 

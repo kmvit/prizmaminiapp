@@ -757,7 +757,7 @@ async def robokassa_success(request: Request):
         # Проверяем, не обрабатывали ли мы уже этот запрос
         if request_key in _processed_success_requests:
             logger.info(f"🔄 Дублирующий запрос SuccessURL для InvId {inv_id}, пропускаем")
-            response = RedirectResponse(url="/complete-payment.html", status_code=302)
+            response = RedirectResponse(url="/api/payment/success", status_code=302)
             # Добавляем заголовки для предотвращения кэширования
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
@@ -791,9 +791,9 @@ async def robokassa_success(request: Request):
                 logger.info(f"🎉 Платеж {inv_id} уже подтвержден. Перенаправляем на страницу успеха.")
                 # Добавляем запрос в кэш обработанных
                 _processed_success_requests.add(request_key)
-                # Перенаправляем на страницу успешного платежа
-                logger.info(f"🔄 Перенаправление на /complete-payment.html")
-                response = RedirectResponse(url="/complete-payment.html", status_code=302)
+                # Перенаправляем на страницу успешного платежа через API endpoint
+                logger.info(f"🔄 Перенаправление на /api/payment/success")
+                response = RedirectResponse(url="/api/payment/success", status_code=302)
                 # Добавляем заголовки для предотвращения кэширования
                 response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
                 response.headers["Pragma"] = "no-cache"
@@ -816,9 +816,9 @@ async def robokassa_success(request: Request):
                 
                 # Добавляем запрос в кэш обработанных
                 _processed_success_requests.add(request_key)
-                # Перенаправляем на страницу успешного платежа
+                # Перенаправляем на страницу успешного платежа через API endpoint
                 logger.info(f"🔄 Перенаправляем пользователя на страницу успешного платежа")
-                response = RedirectResponse(url="/complete-payment.html", status_code=302)
+                response = RedirectResponse(url="/api/payment/success", status_code=302)
                 # Добавляем заголовки для предотвращения кэширования
                 response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
                 response.headers["Pragma"] = "no-cache"
@@ -838,6 +838,33 @@ async def robokassa_success(request: Request):
 async def robokassa_fail(request: Request):
     logger.info(f"💔 Получено уведомление FailURL от Robokassa: {request.query_params}")
     return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
+
+
+@app.get("/api/payment/success", summary="Страница успешной оплаты для Telegram Web App")
+async def payment_success_page(request: Request):
+    """Специальная страница для отображения успешной оплаты в Telegram Web App"""
+    try:
+        # Читаем HTML файл
+        html_file = STATIC_DIR / "complete-payment.html"
+        if not html_file.exists():
+            raise HTTPException(status_code=404, detail="Страница не найдена")
+        
+        with open(html_file, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # Возвращаем HTML с правильными заголовками для Telegram Web App
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(
+            content=html_content,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+    except Exception as e:
+        logger.error(f"❌ Ошибка при загрузке страницы успешной оплаты: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки страницы")
 
 
 @app.post("/api/user/{telegram_id}/generate-premium-report", summary="Запустить генерацию платного отчета")

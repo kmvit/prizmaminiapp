@@ -18,6 +18,10 @@
                 console.log('📱 this.tg:', !!this.tg);
                 console.log('🖥️ isBrowser:', this.isBrowser);
                 
+                // Дополнительная проверка для определения Telegram Web App
+                const isInTelegram = this.detectTelegramEnvironment();
+                console.log('📱 Определена среда Telegram:', isInTelegram);
+                
                 if (!this.tg || this.isBrowser) {
                     console.warn('📱 Telegram WebApp API не доступен или это браузер');
                     console.log('🌐 Работаем в браузерном режиме');
@@ -37,6 +41,33 @@
                 this.getUserData();
                 
                 console.log('Telegram WebApp инициализирован');
+            },
+
+            // Новая функция для более точного определения среды Telegram
+            detectTelegramEnvironment: function() {
+                // Проверка наличия Telegram Web App API
+                if (window.Telegram && window.Telegram.WebApp) {
+                    return true;
+                }
+                
+                // Проверка User-Agent
+                const userAgent = navigator.userAgent.toLowerCase();
+                if (userAgent.includes('telegram') || userAgent.includes('tgwebapp')) {
+                    return true;
+                }
+                
+                // Проверка URL параметров
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.has('tgWebAppData') || urlParams.has('tgWebAppStartParam')) {
+                    return true;
+                }
+                
+                // Проверка наличия Telegram-специфичных заголовков
+                if (document.referrer.includes('t.me') || document.referrer.includes('telegram.org')) {
+                    return true;
+                }
+                
+                return false;
             },
 
             setupTheme: function() {
