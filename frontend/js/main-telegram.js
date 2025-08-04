@@ -1713,7 +1713,7 @@ $(function() {
         // Проверяем статус оплаты при загрузке страницы
         async function checkPaymentStatusOnLoad() {
             try {
-                console.log('🔍 Проверяем статус оплаты на странице спецпредложения...');
+                console.log('🔍 Проверяем статус оплаты на странице price...');
                 const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/progress`);
                 const data = await response.json();
                 
@@ -1739,14 +1739,14 @@ $(function() {
         
         // Дополнительная проверка при получении фокуса окном (возврат из внешней оплаты)
         window.addEventListener('focus', function() {
-            console.log('👀 Окно получило фокус на странице спецпредложения, проверяем статус оплаты');
+            console.log('👀 Окно получило фокус на странице price, проверяем статус оплаты');
             checkPaymentStatusOnLoad();
         });
         
         // Проверка при показе страницы (например, при переключении вкладок)
         document.addEventListener('visibilitychange', function() {
             if (!document.hidden) {
-                console.log('👁️ Страница спецпредложения стала видимой, проверяем статус оплаты');
+                console.log('👁️ Страница price стала видимой, проверяем статус оплаты');
                 checkPaymentStatusOnLoad();
             }
         });
@@ -1767,18 +1767,18 @@ $(function() {
             
             // Останавливаем проверку через 2 минуты
             if (paymentCheckCount >= maxPaymentChecks) {
-                console.log('⏰ Завершение периодической проверки статуса оплаты на странице спецпредложения');
+                console.log('⏰ Завершение периодической проверки статуса оплаты на странице price');
                 clearInterval(paymentCheckInterval);
             }
         }, 5000);
         
         // Сохраняем интервал для возможной очистки
-        window.priceOfferPaymentCheckInterval = paymentCheckInterval;
+        window.pricePaymentCheckInterval = paymentCheckInterval;
         
         // Очищаем интервал при уходе со страницы
         window.addEventListener('beforeunload', function() {
-            if (window.priceOfferPaymentCheckInterval) {
-                clearInterval(window.priceOfferPaymentCheckInterval);
+            if (window.pricePaymentCheckInterval) {
+                clearInterval(window.pricePaymentCheckInterval);
             }
         });
 
