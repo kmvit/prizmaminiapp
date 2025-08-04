@@ -56,13 +56,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const loadingStatus = document.getElementById('loading-status');
     
     let progress = 0;
-    const messages = [
-        'Анализируем ваши ответы...',
-        'Обрабатываем психологические паттерны...',
-        'Генерируем персональные рекомендации...',
-        'Создаем ваш уникальный отчет...',
-        'Почти готово!'
-    ];
     
     function updateProgress() {
         // Увеличиваем прогресс случайным образом
@@ -72,12 +65,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Обновляем визуал
         progressFill.style.width = progress + '%';
         progressText.textContent = Math.round(progress) + '%';
-        
-        // Меняем сообщение в зависимости от прогресса
-        let messageIndex = Math.floor(progress / 20);
-        if (messageIndex < messages.length) {
-            loadingStatus.textContent = messages[messageIndex];
-        }
         
         // Продолжаем анимацию если не достигли 95%
         if (progress < 95) {

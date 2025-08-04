@@ -53,21 +53,46 @@ $(document).ready(function() {
         }, 3000);
         
     } else {
-        // Если в браузере, показываем кнопку и автоматически переходим в Telegram
-        console.log('🌐 В браузере, автоматический возврат в Telegram...');
+        // Если в браузере, закрываем текущее окно чтобы вернуться к основному приложению
+        console.log('🌐 В браузере, закрываем окно оплаты...');
         
-        // Автоматический возврат в Telegram Web App через 2 секунды
+        // Уведомляем основное приложение об успешной оплате через localStorage
+        localStorage.setItem('payment_completed', Date.now().toString());
+        localStorage.setItem('payment_success', 'true');
+        
+        // Автоматически закрываем окно через 2 секунды
         setTimeout(function() {
-            const telegramUrl = 'https://t.me/myprizma_bot/psy?startapp=payment_success';
-            console.log('🚀 Автоматический переход в Telegram:', telegramUrl);
-            window.location.href = telegramUrl;
+            console.log('🔒 Закрываем окно оплаты, возврат к основному приложению');
+            
+            // Пытаемся использовать Telegram Web App API для закрытия
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.close) {
+                window.Telegram.WebApp.close();
+            } else if (window.TelegramWebApp && window.TelegramWebApp.close) {
+                window.TelegramWebApp.close();
+            } else {
+                // Fallback - закрываем обычное окно браузера
+                window.close();
+                
+                // Если window.close() не сработал (некоторые браузеры блокируют),
+                // показываем инструкцию пользователю
+                setTimeout(function() {
+                    alert('Пожалуйста, закройте это окно и вернитесь к основному приложению. Опрос продолжится автоматически.');
+                }, 1000);
+            }
         }, 2000);
         
-        // Ручной переход по клику на кнопку (если автоматический не сработал)
+        // Ручное закрытие по клику на кнопку
         $('#returnToTelegram').click(function(e) {
             e.preventDefault();
-            const telegramUrl = 'https://t.me/myprizma_bot/psy?startapp=payment_success';
-            window.location.href = telegramUrl;
+            console.log('👆 Ручное закрытие окна оплаты');
+            
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.close) {
+                window.Telegram.WebApp.close();
+            } else if (window.TelegramWebApp && window.TelegramWebApp.close) {
+                window.TelegramWebApp.close();
+            } else {
+                window.close();
+            }
         });
     }
     
@@ -75,7 +100,7 @@ $(document).ready(function() {
     let countdown = isInTelegram ? 3 : 2;
     const updateCountdown = function() {
         if (countdown > 0) {
-            const actionText = isInTelegram ? 'продолжение опроса' : 'возврат в Telegram';
+            const actionText = isInTelegram ? 'продолжение опроса' : 'закрытие окна';
             $('#returnToTelegram .download-file-text').text(`${actionText} через ${countdown}с`);
             countdown--;
             setTimeout(updateCountdown, 1000);
