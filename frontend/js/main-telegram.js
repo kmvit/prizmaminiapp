@@ -249,9 +249,12 @@ $(function() {
             if (startParam) {
                 console.log('🚀 Обнаружен параметр запуска:', startParam);
                 
-                if (startParam === 'payment_success') {
+                // Проверяем успешную оплату (с ID или без)
+                if (startParam === 'payment_success' || startParam.startsWith('payment_success_')) {
+                    console.log('✅ Перенаправление на страницу успешной оплаты');
                     window.location.href = 'complete-payment.html';
                 } else if (startParam === 'payment_fail') {
+                    console.log('❌ Перенаправление на страницу неуспешной оплаты');
                     window.location.href = 'uncomplete-payment.html';
                 }
             }

@@ -650,11 +650,13 @@ async def start_premium_payment(telegram_id: int):
         # 4. Формируем URL для возврата в Telegram Web App
         base_url = settings.WEBAPP_URL
         
-        # URL для успешного платежа - динамический, без параметров, ведет на наш сервер
-        success_url = f"{base_url}/api/payment/success/{inv_id}"
+        # URL для успешного платежа - возвращаем в Telegram Web App с параметром успеха
+        telegram_success_url = f"{settings.TELEGRAM_WEBAPP_URL}?startapp=payment_success_{inv_id}"
+        success_url = telegram_success_url
         
-        # URL для неуспешного платежа - динамический, без параметров, ведет на наш сервер
-        fail_url = f"{base_url}/api/payment/fail-redirect"
+        # URL для неуспешного платежа - возвращаем в Telegram Web App с параметром ошибки
+        telegram_fail_url = f"{settings.TELEGRAM_WEBAPP_URL}?startapp=payment_fail"
+        fail_url = telegram_fail_url
         
         logger.info(f"🔗 SuccessURL: {success_url}")
         logger.info(f"🔗 FailURL: {fail_url}")
@@ -724,7 +726,7 @@ async def handle_payment_success(invoice_id: int, request: Request):
         fail_url = f"{settings.TELEGRAM_WEBAPP_URL}?startapp=payment_fail"
         return RedirectResponse(url=fail_url, status_code=302)
 
-@app.post("/api/robokassa/result", summary="Endpoint для ResultURL Robokassa")
+@app.get("/api/robokassa/result", summary="Endpoint для ResultURL Robokassa")
 async def robokassa_result(request: Request):
     try:
         query_params = dict(request.query_params)
@@ -885,8 +887,21 @@ async def robokassa_fail(request: Request):
     logger.info(f"💔 Получено уведомление FailURL от Robokassa: {request.query_params}")
     return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
 
+@app.get("/api/payment/redirect-fail", summary="Redirect для неуспешного платежа (настройки Робокассы)")
+async def payment_redirect_fail(request: Request):
+    """Эндпоинт для редиректа при неуспешной оплате, настроенный в Робокассе"""
+    logger.info(f"💔 Редирект неуспешного платежа: {request.query_params}")
+    return RedirectResponse(url="/uncomplete-payment.html", status_code=302)
 
 
+
+
+@app.get("/api/payment/success/{inv_id}", summary="Успешная оплата с ID")
+async def payment_success_with_id(inv_id: str, request: Request):
+    """Обработка успешной оплаты с ID платежа (генерируется в коде)"""
+    logger.info(f"✅ Успешная оплата с InvId: {inv_id}, параметры: {request.query_params}")
+    # Перенаправляем на общую страницу успеха
+    return RedirectResponse(url="/api/payment/success", status_code=302)
 
 @app.get("/api/payment/success", summary="Страница успешной оплаты для Telegram Web App")
 async def payment_success_page(request: Request):

@@ -25,8 +25,14 @@
             35 вопросов, чтобы получить полную расшифровку
         </p>
     </div>
-    <a href="question.html" class="decoding-download-button" id="startQuestionnaire">
+    <!-- Кнопка для Telegram Web App -->
+    <a href="question.html" class="decoding-download-button" id="startQuestionnaire" style="display: none;">
         <span class="download-file-text">Начать</span>
+    </a>
+    
+    <!-- Кнопка возврата в Telegram для браузера -->
+    <a href="#" class="decoding-download-button" id="returnToTelegram" style="display: none;">
+        <span class="download-file-text">Вернуться в Telegram</span>
     </a>
 </main>
 
@@ -34,6 +40,36 @@
 <script src="./js/jquery-ui.min.js"></script>
 <script src="js/main-telegram.js"></script>
 <script src="js/main.js"></script>
+
+<script>
+// Логика для определения среды и показа правильной кнопки
+$(document).ready(function() {
+    console.log('💳 Инициализация страницы успешной оплаты...');
+    
+    // Проверяем, загружена ли страница в Telegram Web App
+    const isInTelegram = window.Telegram && window.Telegram.WebApp && 
+                        window.Telegram.WebApp.platform !== 'unknown';
+    
+    console.log('📱 Находимся в Telegram Web App:', isInTelegram);
+    
+    if (isInTelegram) {
+        // Показываем кнопку "Начать" для Telegram Web App
+        $('#startQuestionnaire').show();
+        console.log('✅ Показана кнопка "Начать" для Telegram Web App');
+    } else {
+        // Показываем кнопку возврата в Telegram для браузера
+        $('#returnToTelegram').show();
+        console.log('🌐 Показана кнопка "Вернуться в Telegram" для браузера');
+        
+        // Настраиваем ссылку для возврата в Telegram Web App
+        $('#returnToTelegram').click(function(e) {
+            e.preventDefault();
+            const telegramUrl = 'https://t.me/myprizma_bot/psy?startapp=payment_success';
+            window.location.href = telegramUrl;
+        });
+    }
+});
+</script>
 </body>
 </html>
 
