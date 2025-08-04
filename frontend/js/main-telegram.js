@@ -1710,6 +1710,78 @@ $(function() {
         // Получаем Telegram ID пользователя
         const telegramId = getTelegramUserId();
 
+        // Проверяем статус оплаты при загрузке страницы
+        async function checkPaymentStatusOnLoad() {
+            try {
+                console.log('🔍 Проверяем статус оплаты на странице спецпредложения...');
+                const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/progress`);
+                const data = await response.json();
+                
+                if (response.ok && data.user) {
+                    console.log('👤 Статус пользователя:', data.user);
+                    
+                    // Если пользователь оплатил, перенаправляем на вопросы
+                    if (data.user.is_paid) {
+                        console.log('💎 Пользователь оплатил! Перенаправляем на вопросы для продолжения опроса.');
+                        window.location.href = 'question.html';
+                        return;
+                    }
+                } else {
+                    console.error('❌ Ошибка получения статуса пользователя:', data);
+                }
+            } catch (error) {
+                console.error('💥 Ошибка проверки статуса оплаты:', error);
+            }
+        }
+        
+        // Запускаем проверку статуса оплаты
+        checkPaymentStatusOnLoad();
+        
+        // Дополнительная проверка при получении фокуса окном (возврат из внешней оплаты)
+        window.addEventListener('focus', function() {
+            console.log('👀 Окно получило фокус на странице спецпредложения, проверяем статус оплаты');
+            checkPaymentStatusOnLoad();
+        });
+        
+        // Проверка при показе страницы (например, при переключении вкладок)
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                console.log('👁️ Страница спецпредложения стала видимой, проверяем статус оплаты');
+                checkPaymentStatusOnLoad();
+            }
+        });
+        
+        // Запускаем периодическую проверку статуса оплаты (каждые 5 секунд в течение 2 минут)
+        let paymentCheckCount = 0;
+        const maxPaymentChecks = 24; // 24 проверки * 5 сек = 2 минуты
+        
+        const paymentCheckInterval = setInterval(() => {
+            paymentCheckCount++;
+            
+            try {
+                // Проверяем статус оплаты
+                checkPaymentStatusOnLoad();
+            } catch (e) {
+                console.log('Ошибка периодической проверки оплаты:', e);
+            }
+            
+            // Останавливаем проверку через 2 минуты
+            if (paymentCheckCount >= maxPaymentChecks) {
+                console.log('⏰ Завершение периодической проверки статуса оплаты на странице спецпредложения');
+                clearInterval(paymentCheckInterval);
+            }
+        }, 5000);
+        
+        // Сохраняем интервал для возможной очистки
+        window.priceOfferPaymentCheckInterval = paymentCheckInterval;
+        
+        // Очищаем интервал при уходе со страницы
+        window.addEventListener('beforeunload', function() {
+            if (window.priceOfferPaymentCheckInterval) {
+                clearInterval(window.priceOfferPaymentCheckInterval);
+            }
+        });
+
         // Обработка кнопки скачивания бесплатного отчета
         $('#downloadFreeReport').off('click').on('click', async function(e) {
             e.preventDefault();
