@@ -195,7 +195,7 @@ $(function() {
                     initDownloadPage();
                     break;
                 case 'free_download_if_paid':
-                    initPriceOfferPage(); // Используем ту же логику, что и для price-offer
+                    initFreeDownloadIfPaidPage();
                     break;
                 case 'complete-payment':
                     initCompletePaymentPage();
@@ -288,8 +288,8 @@ $(function() {
                     
                     // Если пользователь оплатил, но тест не завершен
                     if (data.user.is_paid && !data.user.test_completed) {
-                        console.log('💎 Пользователь оплатил, но тест не завершен. Перенаправляем на специальную страницу.');
-                        window.location.href = 'free_download_if_paid.html';
+                        console.log('💎 Пользователь оплатил, но тест не завершен. Перенаправляем на вопросы.');
+                        window.location.href = 'question.html';
                         return;
                     }
                     
@@ -407,8 +407,8 @@ $(function() {
                     
                     // Если пользователь оплатил, но тест не завершен
                     if (data.user.is_paid && !data.user.test_completed) {
-                        console.log('💎 Пользователь оплатил, но тест не завершен. Перенаправляем на специальную страницу.');
-                        window.location.href = 'free_download_if_paid.html';
+                        console.log('💎 Пользователь оплатил, но тест не завершен. Перенаправляем на вопросы.');
+                        window.location.href = 'question.html';
                         return;
                     }
                     
@@ -2105,6 +2105,65 @@ $(function() {
         console.log('📁 Страница скачивания инициализирована');
     }
 
+    function initFreeDownloadIfPaidPage() {
+        console.log('💎 Инициализация страницы для оплаченных пользователей...');
+        
+        // Развернуть viewport
+        if (window.TelegramWebApp && window.TelegramWebApp.expandViewport) {
+            window.TelegramWebApp.expandViewport();
+        }
+        
+        // Скрыть стандартные кнопки
+        safeMainButton('hide');
+        safeBackButton('hide');
+
+        // Функция для определения правильного вопроса после оплаты
+        async function determineCorrectQuestion() {
+            try {
+                const telegramId = getTelegramUserId();
+                console.log('🔍 Определяем правильный вопрос для пользователя:', telegramId);
+                
+                // Получаем текущий вопрос пользователя
+                const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/current-question`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    console.log('✅ Получен текущий вопрос:', data);
+                    
+                    // Если пользователь не прошел ни одного вопроса, начинаем с первого
+                    if (data.progress.answered === 0) {
+                        console.log('🔄 Пользователь не прошел ни одного вопроса, начинаем с первого');
+                        window.location.href = 'question.html';
+                        return;
+                    }
+                    
+                    // Если пользователь уже отвечал на вопросы, продолжаем с текущего
+                    console.log('🔄 Пользователь уже отвечал на вопросы, продолжаем с текущего');
+                    window.location.href = 'question.html';
+                    return;
+                } else {
+                    console.error('❌ Ошибка получения текущего вопроса:', data);
+                    // В случае ошибки, просто переходим к вопросам
+                    window.location.href = 'question.html';
+                }
+            } catch (error) {
+                console.error('💥 Ошибка при определении вопроса:', error);
+                // В случае ошибки, просто переходим к вопросам
+                window.location.href = 'question.html';
+            }
+        }
+
+        // Обработка кнопки "Начать"
+        $('#startQuestionnaire').click(function(e) {
+            e.preventDefault();
+            safeHapticFeedback('light');
+            console.log('🔄 Переход к вопросам после оплаты');
+            determineCorrectQuestion();
+        });
+
+        console.log('💎 Страница для оплаченных пользователей инициализирована');
+    }
+
     function initCompletePaymentPage() {
         console.log('💳 Инициализация страницы успешного платежа...');
         
@@ -2117,12 +2176,48 @@ $(function() {
         safeMainButton('hide');
         safeBackButton('hide');
 
+        // Функция для определения правильного вопроса после оплаты
+        async function determineCorrectQuestion() {
+            try {
+                const telegramId = getTelegramUserId();
+                console.log('🔍 Определяем правильный вопрос для пользователя:', telegramId);
+                
+                // Получаем текущий вопрос пользователя
+                const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/current-question`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    console.log('✅ Получен текущий вопрос:', data);
+                    
+                    // Если пользователь не прошел ни одного вопроса, начинаем с первого
+                    if (data.progress.answered === 0) {
+                        console.log('🔄 Пользователь не прошел ни одного вопроса, начинаем с первого');
+                        window.location.href = 'question.html';
+                        return;
+                    }
+                    
+                    // Если пользователь уже отвечал на вопросы, продолжаем с текущего
+                    console.log('🔄 Пользователь уже отвечал на вопросы, продолжаем с текущего');
+                    window.location.href = 'question.html';
+                    return;
+                } else {
+                    console.error('❌ Ошибка получения текущего вопроса:', data);
+                    // В случае ошибки, просто переходим к вопросам
+                    window.location.href = 'question.html';
+                }
+            } catch (error) {
+                console.error('💥 Ошибка при определении вопроса:', error);
+                // В случае ошибки, просто переходим к вопросам
+                window.location.href = 'question.html';
+            }
+        }
+
         // Обработка кнопки "Продолжить опрос"
         $('.button-payment').click(function(e) {
             e.preventDefault();
             safeHapticFeedback('light');
             console.log('🔄 Переход к вопросам после оплаты');
-            window.location.href = 'question.html';
+            determineCorrectQuestion();
         });
 
         // Обработка кнопки "Скачать отчет"
@@ -2134,6 +2229,23 @@ $(function() {
         });
 
         // Проверяем статус пользователя
+        async function checkUserStatus() {
+            try {
+                const telegramId = getTelegramUserId();
+                console.log('🔍 Проверяем статус пользователя на странице успешного платежа...');
+                const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/progress`);
+                const data = await response.json();
+                
+                if (response.ok && data.user) {
+                    console.log('👤 Статус пользователя:', data.user);
+                } else {
+                    console.error('❌ Ошибка получения статуса пользователя:', data);
+                }
+            } catch (error) {
+                console.error('💥 Ошибка проверки статуса пользователя:', error);
+            }
+        }
+        
         checkUserStatus();
 
         console.log('💳 Страница успешного платежа инициализирована');
