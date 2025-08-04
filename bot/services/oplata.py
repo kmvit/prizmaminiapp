@@ -1,7 +1,7 @@
 import decimal
 import hashlib
-from urllib import parse
-from urllib.parse import urlparse
+
+from urllib.parse import urlparse, urlencode
 
 
 class RobokassaService:
@@ -28,7 +28,7 @@ class RobokassaService:
         signature = self.calculate_signature(out_sum_str, inv_id, self.merchant_password_1)
         return signature.lower() == received_signature.lower()
 
-    def check_signature_result(self, out_sum, inv_id, received_signature):
+        def check_signature_result(self, out_sum, inv_id, received_signature):
         # OutSum обязательно строка с двумя знаками после запятой!
         out_sum_str = "{:.2f}".format(float(out_sum)) if not isinstance(out_sum, str) else out_sum
         signature = self.calculate_signature(out_sum_str, inv_id, self.merchant_password_2)
@@ -66,7 +66,7 @@ class RobokassaService:
             data['SuccessURL'] = success_url
         if fail_url:
             data['FailURL'] = fail_url
-        link = f'{robokassa_payment_url}?{parse.urlencode(data)}'
+        link = f'{robokassa_payment_url}?{urlencode(data)}'
         print("[Robokassa] MerchantLogin:", self.merchant_login)
         print("[Robokassa] OutSum:", out_sum)
         print("[Robokassa] InvId:", number)

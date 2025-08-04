@@ -194,9 +194,6 @@ $(function() {
                 case 'download':
                     initDownloadPage();
                     break;
-                case 'free_download_if_paid':
-                    initFreeDownloadIfPaidPage();
-                    break;
                 case 'complete-payment':
                     initCompletePaymentPage();
                     break;
@@ -744,6 +741,20 @@ $(function() {
         console.log('🎯 =============================================================');
         console.log('🎯 ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ ВОПРОСОВ');
         console.log('🎯 =============================================================');
+        
+        // Проверяем, вернулись ли мы с оплаты
+        const paymentCompleted = localStorage.getItem('payment_completed');
+        const isReturnFromPayment = paymentCompleted && (Date.now() - parseInt(paymentCompleted)) < 60000; // В течение минуты
+        
+        if (isReturnFromPayment) {
+            console.log('🔄 Обнаружен возврат с оплаты, очищаем localStorage');
+            localStorage.removeItem('payment_completed');
+            localStorage.removeItem('payment_success');
+            localStorage.removeItem('payment_amount');
+            
+            // Показываем уведомление об успешной оплате
+            safeShowAlert('Оплата прошла успешно! Продолжаем опрос.');
+        }
         
         // Показать кнопку назад (если поддерживается)
         console.log('⬅️ Пытаемся показать BackButton');
@@ -2105,68 +2116,7 @@ $(function() {
         console.log('📁 Страница скачивания инициализирована');
     }
 
-    function initFreeDownloadIfPaidPage() {
-        console.log('💎 Инициализация страницы для оплаченных пользователей...');
-        
-        // Развернуть viewport
-        if (window.TelegramWebApp && window.TelegramWebApp.expandViewport) {
-            window.TelegramWebApp.expandViewport();
-        }
-        
-        // Скрыть стандартные кнопки
-        safeMainButton('hide');
-        safeBackButton('hide');
 
-        // Функция для определения правильного вопроса после оплаты
-        async function determineCorrectQuestion() {
-            try {
-                const telegramId = getTelegramUserId();
-                console.log('🔍 Определяем правильный вопрос для пользователя:', telegramId);
-                
-                // Получаем текущий вопрос пользователя
-                const response = await fetch(`${API_BASE_URL}/api/user/${telegramId}/current-question`);
-                const data = await response.json();
-                
-                if (response.ok) {
-                    console.log('✅ Получен текущий вопрос:', data);
-                    
-                    // Если пользователь не прошел ни одного вопроса, начинаем с первого
-                    if (data.progress.answered === 0) {
-                        console.log('🔄 Пользователь не прошел ни одного вопроса, начинаем с первого');
-                        window.location.href = 'question.html';
-                        return;
-                    }
-                    
-                    // Если пользователь уже отвечал на вопросы, продолжаем с текущего
-                    console.log('🔄 Пользователь уже отвечал на вопросы, продолжаем с текущего');
-                    window.location.href = 'question.html';
-                    return;
-                } else {
-                    console.error('❌ Ошибка получения текущего вопроса:', data);
-                    // В случае ошибки, просто переходим к вопросам
-                    window.location.href = 'question.html';
-                }
-            } catch (error) {
-                console.error('💥 Ошибка при определении вопроса:', error);
-                // В случае ошибки, просто переходим к вопросам
-                window.location.href = 'question.html';
-            }
-        }
-
-        // Обработка кнопки "Начать"
-        $('#startQuestionnaire').click(function(e) {
-            e.preventDefault();
-            safeHapticFeedback('light');
-            console.log('🔄 Переход к вопросам после оплаты');
-            determineCorrectQuestion();
-        });
-
-        // Автоматический редирект на вопросы при загрузке страницы
-        console.log('🔄 Автоматический редирект на вопросы...');
-        determineCorrectQuestion();
-
-        console.log('💎 Страница для оплаченных пользователей инициализирована');
-    }
 
     function initCompletePaymentPage() {
         console.log('💳 Инициализация страницы успешного платежа...');
@@ -2179,6 +2129,22 @@ $(function() {
         // Скрыть стандартные кнопки
         safeMainButton('hide');
         safeBackButton('hide');
+
+        // Проверяем, вернулись ли мы с оплаты
+        const paymentCompleted = localStorage.getItem('payment_completed');
+        const isReturnFromPayment = paymentCompleted && (Date.now() - parseInt(paymentCompleted)) < 60000; // В течение минуты
+        
+        if (isReturnFromPayment) {
+            console.log('🔄 Обнаружен возврат с оплаты, очищаем localStorage');
+            localStorage.removeItem('payment_completed');
+            localStorage.removeItem('payment_success');
+            localStorage.removeItem('payment_amount');
+            
+            // Автоматически переходим к вопросам через 2 секунды
+            setTimeout(function() {
+                determineCorrectQuestion();
+            }, 2000);
+        }
 
         // Функция для определения правильного вопроса после оплаты
         async function determineCorrectQuestion() {
@@ -2230,6 +2196,14 @@ $(function() {
             safeHapticFeedback('light');
             console.log('📥 Переход к скачиванию отчета после оплаты');
             window.location.href = 'download.html';
+        });
+
+        // Обработка кнопки "Вернуться в приложение"
+        $('#returnToTelegram').click(function(e) {
+            e.preventDefault();
+            safeHapticFeedback('light');
+            console.log('🔄 Ручной возврат в приложение');
+            determineCorrectQuestion();
         });
 
         // Проверяем статус пользователя
