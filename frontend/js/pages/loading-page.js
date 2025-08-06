@@ -36,8 +36,43 @@ window.LoadingPage = {
             
             console.log('🚀 Запуск генерации отчета для пользователя:', telegramId);
             
-            // Запускаем генерацию отчета
-            await ApiClient.generateReport(telegramId);
+            // Сначала проверяем статус пользователя и отчетов
+            const status = await ApiClient.getReportsStatus(telegramId);
+            console.log('📊 Статус пользователя:', status);
+            
+            // Если тест не завершен, перенаправляем на страницу с вопросами
+            if (status.status === 'test_not_completed') {
+                console.log('❌ Тест не завершен, перенаправляем на страницу с вопросами');
+                window.location.href = 'question.html';
+                return;
+            }
+            
+            // Проверяем, есть ли уже готовый отчет
+            if (status.available_report && status.available_report.status === 'ready') {
+                console.log('✅ Отчет уже готов, перенаправляем на download');
+                window.location.href = 'download.html';
+                return;
+            }
+            
+            // Определяем какой отчет нужно генерировать
+            const user = status.user;
+            console.log('💰 Статус оплаты пользователя:', user);
+            
+            if (user && user.is_paid) {
+                // Пользователь оплатил премиум - запускаем генерацию премиум отчета
+                console.log('💎 Запускаем генерацию премиум отчета');
+                await ApiClient.generatePremiumReport(telegramId);
+            } else {
+                // Пользователь не оплатил - запускаем генерацию бесплатного отчета
+                console.log('🆓 Запускаем генерацию бесплатного отчета');
+                const result = await ApiClient.generateReport(telegramId);
+                
+                // Проверяем, не оплатил ли пользователь премиум
+                if (result.status === 'premium_paid') {
+                    console.log('💎 Пользователь оплатил премиум, запускаем премиум генерацию');
+                    await ApiClient.generatePremiumReport(telegramId);
+                }
+            }
             
             // Начинаем мониторинг статуса
             this.checkReportStatus();
@@ -85,12 +120,80 @@ window.LoadingPage = {
                 return;
             }
             
+            // Проверяем премиум отчет в процессе генерации
+            if (status.premium_report && status.premium_report.status === 'processing') {
+                console.log('⏳ Премиум отчет генерируется, проверяем через 3 секунды');
+                setTimeout(() => {
+                    this.checkReportStatus();
+                }, 3000);
+                return;
+            }
+            
+            // Проверяем статус premium_paid от бесплатного отчета
+            if (status.free_report && status.free_report.status === 'premium_paid') {
+                console.log('💎 Пользователь оплатил премиум, запускаем премиум генерацию');
+                ApiClient.generatePremiumReport(telegramId).then(() => {
+                    // Начинаем мониторинг статуса
+                    setTimeout(() => {
+                        this.checkReportStatus();
+                    }, 3000);
+                }).catch(error => {
+                    console.error('❌ Ошибка при запуске премиум генерации:', error);
+                });
+                return;
+            }
+            
+            // Проверяем статус payment_required от премиум отчета
+            if (status.premium_report && status.premium_report.status === 'payment_required') {
+                console.log('💰 Требуется оплата для премиум отчета, перенаправляем на оплату');
+                window.location.href = 'price.html';
+                return;
+            }
+            
             // Если нет доступного отчета, но есть бесплатный отчет в процессе
             if (status.free_report && status.free_report.status === 'processing') {
                 console.log('⏳ Бесплатный отчет генерируется, проверяем через 3 секунды');
                 setTimeout(() => {
                     this.checkReportStatus();
                 }, 3000);
+                return;
+            }
+            
+            // Если нет доступного отчета
+            if (status.available_report && status.available_report.status === 'not_available') {
+                console.log('❌ Нет доступного отчета, перенаправляем на страницу с вопросами');
+                window.location.href = 'question.html';
+                return;
+            }
+            
+            // Если отчет не удалось сгенерировать
+            if (status.available_report && status.available_report.status === 'failed') {
+                console.log('❌ Ошибка генерации отчета:', status.available_report.message);
+                window.TelegramWebApp?.showAlert('Ошибка генерации отчета. Попробуйте позже.');
+                setTimeout(() => {
+                    window.location.href = 'question.html';
+                }, 3000);
+                return;
+            }
+            
+            // Если требуется оплата
+            if (status.available_report && status.available_report.status === 'payment_required') {
+                console.log('💰 Требуется оплата, перенаправляем на страницу оплаты');
+                window.location.href = 'price.html';
+                return;
+            }
+            
+            // Если премиум отчет еще не сгенерирован
+            if (status.available_report && status.available_report.status === 'not_started' && status.available_report.type === 'premium') {
+                console.log('💎 Премиум отчет еще не сгенерирован, запускаем генерацию');
+                ApiClient.generatePremiumReport(telegramId).then(() => {
+                    // Начинаем мониторинг статуса
+                    setTimeout(() => {
+                        this.checkReportStatus();
+                    }, 3000);
+                }).catch(error => {
+                    console.error('❌ Ошибка при запуске премиум генерации:', error);
+                });
                 return;
             }
             

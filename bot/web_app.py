@@ -382,6 +382,11 @@ async def check_report_status(telegram_id: int):
         if not user.test_completed:
             return {"status": "test_not_completed", "message": "Тест не завершен"}
         
+        # Проверяем, не оплатил ли пользователь премиум отчет
+        if user.is_paid:
+            logger.info(f"💰 Пользователь {telegram_id} оплатил премиум отчет. Не возвращаем статус бесплатного отчета.")
+            return {"status": "premium_paid", "message": "Для оплативших премиум пользователей используется премиум отчет."}
+        
         # Ищем последний отчет пользователя
         reports_dir = Path("reports")
         pattern = f"prizma_report_{telegram_id}_*.pdf"
@@ -427,7 +432,12 @@ async def start_report_generation(telegram_id: int):
         if not user.test_completed:
             return {"status": "error", "message": "Тест не завершен"}
         
-        logger.info(f"🚀 Запускаем синхронную генерацию отчета для пользователя {telegram_id}")
+        # Проверяем, не оплатил ли пользователь премиум отчет
+        if user.is_paid:
+            logger.warning(f"⚠️ Пользователь {telegram_id} оплатил премиум отчет. Не запускаем бесплатную генерацию.")
+            return {"status": "premium_paid", "message": "Для оплативших премиум пользователей используется премиум отчет."}
+        
+        logger.info(f"🚀 Запускаем синхронную генерацию БЕСПЛАТНОГО отчета для пользователя {telegram_id}")
         
         # Запускаем синхронную генерацию отчета
         report_path = await generate_report_background(telegram_id)
@@ -458,6 +468,13 @@ async def download_personal_report(telegram_id: int, download: Optional[str] = N
         if not user.test_completed:
             logger.warning(f"⚠️ Пользователь {telegram_id} не завершил тест")
             raise HTTPException(status_code=400, detail="Тест не завершен. Завершите тест для получения отчета.")
+        
+        # Проверяем, не оплатил ли пользователь премиум отчет
+        if user.is_paid:
+            logger.info(f"💰 Пользователь {telegram_id} оплатил премиум отчет. Перенаправляем на премиум отчет.")
+            # Перенаправляем на премиум отчет
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=f"/api/download/premium-report/{telegram_id}")
         
         # Ищем готовый отчет пользователя
         reports_dir = Path("reports")
@@ -585,6 +602,10 @@ async def check_premium_report_status(telegram_id: int):
         
         if not user.test_completed:
             return {"status": "test_not_completed", "message": "Тест не завершен"}
+        
+        # Проверяем, оплатил ли пользователь премиум отчет
+        if not user.is_paid:
+            return {"status": "payment_required", "message": "Для доступа к премиум отчету требуется оплата."}
         
         # Получаем статус генерации из БД
         status_info = await db_service.get_report_generation_status(telegram_id, "premium")
@@ -991,6 +1012,11 @@ async def download_premium_personal_report(telegram_id: int, download: Optional[
             logger.warning(f"⚠️ Пользователь {telegram_id} не завершил тест")
             raise HTTPException(status_code=400, detail="Тест не завершен. Завершите тест для получения платного отчета.")
         
+        # Проверяем, оплатил ли пользователь премиум отчет
+        if not user.is_paid:
+            logger.warning(f"⚠️ Пользователь {telegram_id} не оплатил премиум отчет")
+            raise HTTPException(status_code=403, detail="Для доступа к премиум отчету требуется оплата.")
+        
         # Ищем готовый платный отчет пользователя
         reports_dir = Path("reports")
         pattern = f"prizma_premium_report_{telegram_id}_*.pdf"
@@ -1203,19 +1229,33 @@ async def check_user_reports_status(telegram_id: int):
                 "message": "Бесплатный отчет готов к скачиванию",
                 "download_url": f"/api/download/report/{telegram_id}"
             }
-        elif user.is_paid and premium_report_status.get('status') == 'processing':
+        elif free_report_status.get('status') == 'premium_paid':
+            # Если пользователь оплатил премиум, но премиум отчет еще не готов
+            if user.is_paid:
+                available_report = {
+                    "type": "premium",
+                    "status": "not_started",
+                    "message": "Премиум отчет еще не сгенерирован"
+                }
+            else:
+                available_report = {
+                    "type": "free",
+                    "status": "premium_paid",
+                    "message": "Для оплативших премиум пользователей используется премиум отчет"
+                }
+        elif premium_report_status.get('status') == 'processing':
             # Если премиум отчет в процессе генерации
             available_report = {
                 "type": "premium",
                 "status": "processing",
                 "message": "Премиум отчет генерируется..."
             }
-        elif free_report_status.get('status') == 'processing':
-            # Если бесплатный отчет в процессе генерации
+        elif premium_report_status.get('status') == 'payment_required':
+            # Если требуется оплата для премиум отчета
             available_report = {
-                "type": "free",
-                "status": "processing",
-                "message": "Бесплатный отчет генерируется..."
+                "type": "premium",
+                "status": "payment_required",
+                "message": "Для доступа к премиум отчету требуется оплата"
             }
         elif user.is_paid and premium_report_status.get('status') == 'failed':
             # Если премиум отчет не удалось сгенерировать, но есть бесплатный
@@ -1234,6 +1274,13 @@ async def check_user_reports_status(telegram_id: int):
                     "message": "Ошибка генерации премиум отчета",
                     "error": premium_report_status.get('error', 'Неизвестная ошибка')
                 }
+        elif free_report_status.get('status') == 'processing':
+            # Если бесплатный отчет в процессе генерации
+            available_report = {
+                "type": "free",
+                "status": "processing",
+                "message": "Бесплатный отчет генерируется..."
+            }
         elif free_report_status.get('status') == 'failed':
             # Если бесплатный отчет не удалось сгенерировать
             available_report = {
@@ -1241,6 +1288,13 @@ async def check_user_reports_status(telegram_id: int):
                 "status": "failed",
                 "message": "Ошибка генерации бесплатного отчета",
                 "error": free_report_status.get('error', 'Неизвестная ошибка')
+            }
+        else:
+            # Если нет доступного отчета
+            available_report = {
+                "type": "none",
+                "status": "not_available",
+                "message": "Нет доступного отчета"
             }
         
         return {
