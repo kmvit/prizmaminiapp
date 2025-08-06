@@ -12,9 +12,12 @@ window.PricePage = {
     init() {
         console.log('💰 Инициализация страницы цен');
         
-        this.setupTelegramUI();
-        this.setupEventHandlers();
-        this.checkPaymentStatusOnLoad();
+        // Сначала проверяем статус платежа - если оплачен, перенаправляем
+        this.checkPaymentStatusOnLoad().then(() => {
+            // Только если не перенаправлены, настраиваем UI и обработчики
+            this.setupTelegramUI();
+            this.setupEventHandlers();
+        });
     },
 
     /**
@@ -120,18 +123,31 @@ window.PricePage = {
         try {
             const telegramId = window.TelegramWebApp ? window.TelegramWebApp.getUserId() : 123456789;
             
-            const status = await ApiClient.getUserProfile(telegramId);
-            console.log('💳 Статус платежа:', status);
-            
-            if (status.payment_status === 'completed') {
-                console.log('✅ Платеж завершен, перенаправляем на question');
-                window.location.href = 'question.html';
+            // Проверяем, что ApiClient доступен
+            if (typeof ApiClient === 'undefined') {
+                console.warn('⚠️ ApiClient недоступен, пропускаем проверку статуса');
                 return;
             }
             
-            if (status.payment_status === 'pending') {
+            console.log('🔍 Проверяем статус платежа для пользователя:', telegramId);
+            
+            const status = await ApiClient.getUserProfile(telegramId);
+            console.log('💳 Статус платежа:', status);
+            
+            if (status && status.payment_status === 'completed') {
+                console.log('✅ Платеж завершен, перенаправляем на question');
+                // Небольшая задержка для лучшего UX
+                setTimeout(() => {
+                    window.location.href = 'question.html';
+                }, 100);
+                return;
+            }
+            
+            if (status && status.payment_status === 'pending') {
                 console.log('⏳ Платеж в процессе, перенаправляем на payment');
-                window.location.href = 'payment.html';
+                setTimeout(() => {
+                    window.location.href = 'payment.html';
+                }, 100);
                 return;
             }
             
@@ -139,6 +155,7 @@ window.PricePage = {
             
         } catch (error) {
             console.error('❌ Ошибка при проверке статуса платежа:', error);
+            console.log('🔄 Продолжаем загрузку страницы цен');
         }
     },
 
