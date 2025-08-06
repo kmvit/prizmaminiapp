@@ -21,25 +21,32 @@ class DatabaseService:
     async def get_or_create_user(self, telegram_id: int, **user_data) -> User:
         """Получить пользователя или создать нового"""
         async with async_session() as session:
-            # Ищем существующего пользователя
-            stmt = select(User).where(User.telegram_id == telegram_id)
-            result = await session.execute(stmt)
-            user = result.scalar_one_or_none()
-            
-            if not user:
-                # Создаем нового пользователя
-                user = User(
-                    telegram_id=telegram_id,
-                    first_name=user_data.get('first_name', ''),
-                    last_name=user_data.get('last_name'),
-                    username=user_data.get('username'),
-                    language_code=user_data.get('language_code')
-                )
-                session.add(user)
-                await session.commit()
-                await session.refresh(user)
-            
-            return user
+            try:
+                # Ищем существующего пользователя
+                stmt = select(User).where(User.telegram_id == telegram_id)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    # Создаем нового пользователя
+                    user = User(
+                        telegram_id=telegram_id,
+                        first_name=user_data.get('first_name', ''),
+                        last_name=user_data.get('last_name'),
+                        username=user_data.get('username'),
+                        language_code=user_data.get('language_code')
+                    )
+                    session.add(user)
+                    await session.commit()
+                    await session.refresh(user)
+                else:
+                    # Если пользователь найден, просто возвращаем его без коммита
+                    await session.refresh(user)
+                
+                return user
+            except Exception as e:
+                await session.rollback()
+                raise e
     
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
         """Получить пользователя по ID"""
@@ -47,6 +54,39 @@ class DatabaseService:
             stmt = select(User).where(User.id == user_id)
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
+    
+    async def delete_user(self, telegram_id: int) -> bool:
+        """Удалить пользователя и все связанные данные"""
+        async with async_session() as session:
+            try:
+                # Находим пользователя
+                stmt = select(User).where(User.telegram_id == telegram_id)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    return False
+                
+                # Удаляем все связанные данные
+                from bot.database.models import Answer, Payment, Report
+                
+                # Удаляем ответы
+                await session.execute(Answer.__table__.delete().where(Answer.user_id == user.id))
+                
+                # Удаляем платежи
+                await session.execute(Payment.__table__.delete().where(Payment.user_id == user.id))
+                
+                # Удаляем отчеты
+                await session.execute(Report.__table__.delete().where(Report.user_id == user.id))
+                
+                # Удаляем пользователя
+                await session.delete(user)
+                await session.commit()
+                
+                return True
+            except Exception as e:
+                await session.rollback()
+                raise e
     
     async def update_user_profile(self, telegram_id: int, name: str = None, age: int = None, gender: str = None) -> User:
         """Обновить профиль пользователя"""
@@ -429,6 +469,33 @@ class DatabaseService:
         """Проверить, генерируется ли отчет"""
         status_info = await self.get_report_generation_status(telegram_id, report_type)
         return status_info.get("status") == ReportGenerationStatus.PROCESSING.value
+    
+    async def clear_report_statuses(self, telegram_id: int) -> bool:
+        """Очистить статусы отчетов пользователя"""
+        async with async_session() as session:
+            try:
+                stmt = select(User).where(User.telegram_id == telegram_id)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    return False
+                
+                # Сбрасываем статусы отчетов
+                from bot.database.models import ReportGenerationStatus
+                
+                user.free_report_status = ReportGenerationStatus.PENDING
+                user.free_report_path = None
+                user.report_generation_error = None
+                
+                user.premium_report_status = ReportGenerationStatus.PENDING
+                user.premium_report_path = None
+                
+                await session.commit()
+                return True
+            except Exception as e:
+                await session.rollback()
+                raise e
 
 # Создаем экземпляр сервиса
 db_service = DatabaseService() 

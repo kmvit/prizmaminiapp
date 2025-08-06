@@ -1,14 +1,14 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
-from bot.config import DATABASE_URL
+from bot.config import DATABASE_URL, SQL_ECHO
 from bot.database.models import Base
 from sqlalchemy import text # Добавляем импорт text
 
 # Создаем асинхронный движок SQLAlchemy
 engine = create_async_engine(
     DATABASE_URL,
-    echo=True,  # Включаем логирование SQL-запросов
+    echo=SQL_ECHO,  # Логирование SQL-запросов только если включено
     poolclass=NullPool  # Отключаем пул соединений для SQLite
 )
 

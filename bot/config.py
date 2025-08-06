@@ -22,6 +22,9 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "sonar-pro")
 PERPLEXITY_ENABLED = os.getenv("PERPLEXITY_ENABLED", "false").lower() == "true"
 
+# Настройки логирования
+SQL_ECHO = os.getenv("SQL_ECHO", "false").lower() == "true"
+
 
 # Robokassa
 ROBOKASSA_LOGIN = os.getenv("ROBOKASSA_LOGIN")

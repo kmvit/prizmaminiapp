@@ -16,7 +16,7 @@ from bot.models.api_models import (
 )
 from loguru import logger
 from bot.services.oplata import RobokassaService
-from bot.database.models import PaymentStatus, ReportGenerationStatus
+from bot.database.models import PaymentStatus, ReportGenerationStatus, User
 
 # Путь к статическим файлам
 STATIC_DIR = BASE_DIR / "frontend"
@@ -1206,7 +1206,7 @@ async def check_user_reports_status(telegram_id: int):
     try:
         logger.info(f"🔍 Проверка статуса отчетов для пользователя {telegram_id}")
         
-        # Получаем пользователя
+        # Получаем пользователя ОДИН РАЗ
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
         if not user.test_completed:
@@ -1216,11 +1216,11 @@ async def check_user_reports_status(telegram_id: int):
                 "available_report": None
             }
         
-        # Проверяем статус бесплатного отчета
-        free_report_status = await check_report_status(telegram_id)
+        # Проверяем статус бесплатного отчета (передаем уже полученного пользователя)
+        free_report_status = await check_report_status_with_user(telegram_id, user)
         
-        # Проверяем статус премиум отчета
-        premium_report_status = await check_premium_report_status(telegram_id)
+        # Проверяем статус премиум отчета (передаем уже полученного пользователя)
+        premium_report_status = await check_premium_report_status_with_user(telegram_id, user)
         
         logger.info(f"📊 Статус бесплатного отчета: {free_report_status.get('status')}")
         logger.info(f"📊 Статус премиум отчета: {premium_report_status.get('status')}")
@@ -1306,32 +1306,111 @@ async def check_user_reports_status(telegram_id: int):
                 "error": free_report_status.get('error', 'Неизвестная ошибка')
             }
         else:
-            # Если нет доступного отчета
+            # Если нет доступных отчетов
             available_report = {
                 "type": "none",
                 "status": "not_available",
-                "message": "Нет доступного отчета"
+                "message": "Нет доступных отчетов"
             }
         
         return {
             "status": "success",
-            "user": {
-                "telegram_id": user.telegram_id,
-                "is_paid": user.is_paid,
-                "test_completed": user.test_completed
-            },
-            "free_report": free_report_status,
-            "premium_report": premium_report_status,
+            "user_id": telegram_id,
+            "test_completed": user.test_completed,
+            "is_paid": user.is_paid,
+            "free_report_status": free_report_status,
+            "premium_report_status": premium_report_status,
             "available_report": available_report
         }
         
     except Exception as e:
-        logger.error(f"❌ Error checking user reports status: {e}")
+        logger.error(f"❌ Ошибка при проверке статуса отчетов для пользователя {telegram_id}: {e}")
         return {
-            "status": "error", 
-            "message": "Ошибка при проверке статуса отчетов",
+            "status": "error",
+            "message": f"Ошибка при проверке статуса отчетов: {str(e)}",
             "available_report": None
         }
+
+# Вспомогательные функции для работы с уже полученным пользователем
+async def check_report_status_with_user(telegram_id: int, user: User):
+    """Проверить готовность отчета пользователя (с уже полученным пользователем)"""
+    try:
+        if not user.test_completed:
+            return {"status": "test_not_completed", "message": "Тест не завершен"}
+        
+        # Проверяем, не оплатил ли пользователь премиум отчет
+        if user.is_paid:
+            logger.info(f"💰 Пользователь {telegram_id} оплатил премиум отчет. Не возвращаем статус бесплатного отчета.")
+            return {"status": "premium_paid", "message": "Для оплативших премиум пользователей используется премиум отчет."}
+        
+        # Ищем последний отчет пользователя
+        reports_dir = Path("reports")
+        pattern = f"prizma_report_{telegram_id}_*.pdf"
+        
+        import glob
+        report_files = glob.glob(str(reports_dir / pattern))
+        
+        if report_files:
+            # Сортируем по timestamp в имени файла (более надежно чем st_mtime)
+            # Имя файла: prizma_report_{telegram_id}_{timestamp}.pdf
+            def extract_timestamp(filepath):
+                filename = Path(filepath).name
+                # Извлекаем timestamp из имени файла: prizma_report_123456789_20250627_082506.pdf
+                parts = filename.split('_')
+                if len(parts) >= 5:
+                    try:
+                        # Берем дату и время: parts[3] = '20250627', parts[4] = '082506.pdf'
+                        date_part = parts[3]
+                        time_part = parts[4].replace('.pdf', '').replace('.txt', '')
+                        timestamp_str = f"{date_part}_{time_part}"
+                        return timestamp_str
+                    except:
+                        return "00000000_000000"
+                return "00000000_000000"
+                
+            # Находим последний файл по timestamp
+            latest_report = max(report_files, key=extract_timestamp)
+            return {"status": "ready", "message": "Отчет готов к скачиванию", "report_path": latest_report}
+        else:
+            return {"status": "not_ready", "message": "Отчет еще не готов"}
+            
+    except Exception as e:
+        logger.error(f"Error checking report status: {e}")
+        return {"status": "error", "message": "Ошибка при проверке статуса отчета"}
+
+async def check_premium_report_status_with_user(telegram_id: int, user: User):
+    """Проверить статус готовности платного отчета пользователя (с уже полученным пользователем)"""
+    try:
+        if not user.test_completed:
+            return {"status": "test_not_completed", "message": "Тест не завершен"}
+        
+        # Проверяем, оплатил ли пользователь премиум отчет
+        if not user.is_paid:
+            return {"status": "payment_required", "message": "Для доступа к премиум отчету требуется оплата."}
+        
+        # Получаем статус генерации из БД
+        status_info = await db_service.get_report_generation_status(telegram_id, "premium")
+        
+        if status_info.get("status") == "completed" and status_info.get("report_path"):
+            return {
+                "status": "ready", 
+                "message": "Премиум отчет готов к скачиванию", 
+                "report_path": status_info["report_path"]
+            }
+        elif status_info.get("status") == "processing":
+            return {"status": "processing", "message": "Отчет генерируется..."}
+        elif status_info.get("status") == "failed":
+            return {
+                "status": "failed", 
+                "message": "Ошибка генерации отчета", 
+                "error": status_info.get("error", "Неизвестная ошибка")
+            }
+        else:
+            return {"status": "not_started", "message": "Генерация не запущена"}
+            
+    except Exception as e:
+        logger.error(f"Error checking premium report status: {e}")
+        return {"status": "error", "message": "Ошибка при проверке статуса платного отчета"}
 
 # Подключение статических файлов в конце (после всех API маршрутов)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
