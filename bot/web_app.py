@@ -1010,6 +1010,9 @@ async def start_premium_report_generation(telegram_id: int, background_tasks: Ba
             logger.warning(f"⚠️ Пользователь {telegram_id} не оплатил премиум отчет. Перенаправляем на оплату.")
             return {"status": "payment_required", "message": "Для генерации премиум отчета требуется оплата."}
 
+        # Проверяем и сбрасываем зависшие отчеты
+        await db_service.reset_stuck_reports(telegram_id)
+        
         # Проверяем, не генерируется ли уже отчет
         is_generating = await db_service.is_report_generating(telegram_id, "premium")
         logger.info(f"🔍 Проверка генерации премиум отчета для пользователя {telegram_id}: {is_generating}")
@@ -1439,19 +1442,22 @@ async def check_premium_report_status_with_user(telegram_id: int, user: User):
         if not user.is_paid:
             return {"status": "payment_required", "message": "Для доступа к премиум отчету требуется оплата."}
         
+        # Проверяем и сбрасываем зависшие отчеты
+        await db_service.reset_stuck_reports(telegram_id)
+        
         # Получаем статус генерации из БД
         status_info = await db_service.get_report_generation_status(telegram_id, "premium")
         logger.info(f"📊 Получен статус премиум отчета для пользователя {telegram_id}: {status_info}")
         
-        if status_info.get("status") == "completed" and status_info.get("report_path"):
+        if status_info.get("status") == "COMPLETED" and status_info.get("report_path"):
             return {
                 "status": "ready", 
                 "message": "Премиум отчет готов к скачиванию", 
                 "report_path": status_info["report_path"]
             }
-        elif status_info.get("status") == "processing":
+        elif status_info.get("status") == "PROCESSING":
             return {"status": "processing", "message": "Отчет генерируется..."}
-        elif status_info.get("status") == "failed":
+        elif status_info.get("status") == "FAILED":
             return {
                 "status": "failed", 
                 "message": "Ошибка генерации отчета", 

@@ -511,6 +511,45 @@ class DatabaseService:
             except Exception as e:
                 await session.rollback()
                 raise e
+    
+    async def reset_stuck_reports(self, telegram_id: int) -> bool:
+        """Сбросить зависшие отчеты (которые в статусе PROCESSING слишком долго)"""
+        async with async_session() as session:
+            try:
+                stmt = select(User).where(User.telegram_id == telegram_id)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    return False
+                
+                from bot.database.models import ReportGenerationStatus
+                from datetime import datetime, timedelta
+                
+                # Проверяем, не завис ли отчет в статусе PROCESSING
+                if user.report_generation_started_at:
+                    # Если отчет генерируется больше 30 минут, считаем его зависшим
+                    time_diff = datetime.utcnow() - user.report_generation_started_at
+                    if time_diff > timedelta(minutes=30):
+                        logger.warning(f"⚠️ Сбрасываем зависший отчет для пользователя {telegram_id} (время генерации: {time_diff})")
+                        
+                        if user.free_report_status == ReportGenerationStatus.PROCESSING:
+                            user.free_report_status = ReportGenerationStatus.PENDING
+                            user.free_report_path = None
+                            user.report_generation_error = "Отчет завис в процессе генерации"
+                        
+                        if user.premium_report_status == ReportGenerationStatus.PROCESSING:
+                            user.premium_report_status = ReportGenerationStatus.PENDING
+                            user.premium_report_path = None
+                            user.report_generation_error = "Отчет завис в процессе генерации"
+                        
+                        await session.commit()
+                        return True
+                
+                return False
+            except Exception as e:
+                await session.rollback()
+                raise e
 
 # Создаем экземпляр сервиса
 db_service = DatabaseService() 
