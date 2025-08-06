@@ -49,6 +49,7 @@ class UserProgressResponse(BaseModel):
 class UserProfileResponse(BaseModel):
     status: str
     user: dict
+    payment_status: Optional[str] = Field(None, description="Статус оплаты: completed, pending, или None")
 
 # Модели ошибок
 class ErrorResponse(BaseModel):

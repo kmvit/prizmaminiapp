@@ -17,6 +17,8 @@ window.PricePage = {
             // Только если не перенаправлены, настраиваем UI и обработчики
             this.setupTelegramUI();
             this.setupEventHandlers();
+            // Обновляем текст кнопки в зависимости от статуса пользователя
+            this.updateButtonText();
         });
     },
 
@@ -49,6 +51,44 @@ window.PricePage = {
             console.log('💎 Запуск премиум отчета');
             this.startPremiumPayment();
         });
+    },
+
+    /**
+     * Обновление текста кнопки в зависимости от статуса пользователя
+     */
+    async updateButtonText() {
+        try {
+            const telegramId = window.TelegramWebApp ? window.TelegramWebApp.getUserId() : 123456789;
+            
+            // Получаем профиль пользователя
+            const profile = await ApiClient.getUserProfile(telegramId);
+            console.log('👤 Профиль пользователя:', profile);
+            
+            if (profile && profile.payment_status === 'completed') {
+                // Пользователь оплатил, проверяем прогресс
+                const progress = await ApiClient.getUserProgress(telegramId);
+                console.log('📊 Прогресс пользователя:', progress);
+                
+                let buttonText = 'Начать';
+                
+                if (progress && progress.progress && progress.progress.answered > 0) {
+                    buttonText = 'Продолжить';
+                }
+                
+                // Обновляем текст кнопки
+                $('#startPremiumPayment').text(buttonText);
+                console.log(`✅ Кнопка обновлена: "${buttonText}"`);
+            } else {
+                // Пользователь не оплатил, оставляем "Попробовать"
+                $('#startPremiumPayment').text('Попробовать');
+                console.log('✅ Кнопка оставлена: "Попробовать"');
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка при обновлении текста кнопки:', error);
+            // В случае ошибки оставляем стандартный текст
+            $('#startPremiumPayment').text('Попробовать');
+        }
     },
 
     /**
@@ -88,26 +128,39 @@ window.PricePage = {
                 window.TelegramWebApp.hapticFeedback('light');
             }
 
-            console.log('💳 Запуск процесса оплаты для пользователя:', telegramId);
+            console.log('💳 Проверяем статус пользователя для премиум отчета:', telegramId);
             
-            // Создаем платежную ссылку напрямую
-            const response = await fetch(`${window.location.origin}/api/user/${telegramId}/start-premium-payment`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.status === 'success') {
-                console.log('✅ Платежная ссылка получена:', data.payment_link);
+            // Сначала проверяем статус оплаты
+            const profile = await ApiClient.getUserProfile(telegramId);
+            console.log('👤 Профиль пользователя:', profile);
+            
+            if (profile && profile.payment_status === 'completed') {
+                // Пользователь уже оплатил, перенаправляем на вопросы
+                console.log('✅ Пользователь оплатил, перенаправляем на вопросы');
                 this.safeHapticFeedback('light');
-                // Перенаправляем пользователя на платежную страницу
-                window.location.href = data.payment_link;
+                window.location.href = 'question.html';
             } else {
-                console.error('❌ Ошибка при получении платежной ссылки:', data);
-                this.safeShowAlert('Ошибка при создании платежа. Попробуйте позже.');
+                // Пользователь не оплатил, создаем платежную ссылку
+                console.log('💳 Создание платежной ссылки для пользователя:', telegramId);
+                
+                const response = await fetch(`${window.location.origin}/api/user/${telegramId}/start-premium-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    console.log('✅ Платежная ссылка получена:', data.payment_link);
+                    this.safeHapticFeedback('light');
+                    // Перенаправляем пользователя на платежную страницу
+                    window.location.href = data.payment_link;
+                } else {
+                    console.error('❌ Ошибка при получении платежной ссылки:', data);
+                    this.safeShowAlert('Ошибка при создании платежа. Попробуйте позже.');
+                }
             }
             
         } catch (error) {

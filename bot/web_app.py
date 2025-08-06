@@ -283,6 +283,13 @@ async def get_user_profile(telegram_id: int):
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         logger.info(f"Пользователь найден: {user.telegram_id}")
         
+        # Определяем статус оплаты
+        payment_status = None
+        if user.is_paid:
+            payment_status = "completed"
+        elif user.is_premium_paid:
+            payment_status = "pending"
+        
         return UserProfileResponse(
             status="success",
             user={
@@ -291,7 +298,8 @@ async def get_user_profile(telegram_id: int):
                 "name": user.name,
                 "age": user.age,
                 "gender": user.gender
-            }
+            },
+            payment_status=payment_status
         )
         
     except Exception as e:
@@ -321,6 +329,13 @@ async def update_user_profile(telegram_id: int, profile_data: UserProfileUpdate)
         )
         logger.info(f"Профиль обновлен: name={user.name}, age={user.age}, gender={user.gender}")
         
+        # Определяем статус оплаты
+        payment_status = None
+        if user.is_paid:
+            payment_status = "completed"
+        elif user.is_premium_paid:
+            payment_status = "pending"
+        
         return UserProfileResponse(
             status="success",
             user={
@@ -329,7 +344,8 @@ async def update_user_profile(telegram_id: int, profile_data: UserProfileUpdate)
                 "name": user.name,
                 "age": user.age,
                 "gender": user.gender
-            }
+            },
+            payment_status=payment_status
         )
         
     except Exception as e:
