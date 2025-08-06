@@ -7,19 +7,16 @@
     <meta name="format-detection" content="telephone=no">
     <title>PRIZMA</title>
     <link rel="stylesheet" href="css/main.css">
-    <script src="js/telegram-vanilla.js"></script>
+    
 </head>
 <body class="bodyQuestion">
 
 <main class="main question">
     <div class="question-header">
         <div class="question-prev-button-container">
-            <a href="login.html" class="steps-header-button">
-                <img src="./images/arrow-prev-icon.svg" alt="">
-            </a>
-            <h1 class="question-num linear-text">Вопрос <span class="current-question">3</span> из <span class="question-count">15</span></h1>
+            <h1 class="question-num linear-text">Вопрос <span class="current-question"></span> из <span class="question-count"></span></h1>
         </div>
-        <p class="question-title" id="questionText">Подробно расскажите о своих главных ценностях в жизни</p>
+        <p class="question-title" id="questionText">Загрузка вопроса...</p>
     </div>
     <div class="question-area-container">
         <p class="question-area-note"><span>*</span> Ваши ответы должны быть более 500 знаков <br>
@@ -42,6 +39,10 @@
 
 <script src="js/jquery.min.js"></script>
 <script src="./js/jquery-ui.min.js"></script>
+<script src="js/utils/telegram-api.js"></script>
+<script src="js/utils/api-client.js"></script>
+<script src="js/utils/ui-helpers.js"></script>
+<script src="js/pages/question-page.js"></script>
 <script src="js/main-telegram.js"></script>
 </body>
 </html>

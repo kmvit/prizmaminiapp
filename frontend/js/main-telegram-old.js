@@ -6,7 +6,18 @@
 'use strict';
 
 // Импорт модулей страниц
-// Модули загружаются через script теги в HTML файлах
+import IndexPage from './pages/index-page.js';
+import StepsPage from './pages/steps-page.js';
+import LoginPage from './pages/login-page.js';
+import QuestionPage from './pages/question-page.js';
+import LoadingPage from './pages/loading-page.js';
+import AnswersPage from './pages/answers-page.js';
+import PricePage from './pages/price-page.js';
+import PriceOfferPage from './pages/price-offer-page.js';
+import PaymentPage from './pages/payment-page.js';
+import DownloadPage from './pages/download-page.js';
+import CompletePaymentPage from './pages/complete-payment-page.js';
+import UncompletePaymentPage from './pages/uncomplete-payment-page.js';
 
 $(function() {
     // ========================================

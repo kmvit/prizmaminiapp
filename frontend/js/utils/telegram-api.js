@@ -1,4 +1,8 @@
-// Telegram Web App SDK Integration (Vanilla JS)
+/**
+ * Telegram Web App API Utilities
+ * Утилиты для работы с Telegram Web App API
+ */
+
 (function() {
     'use strict';
 
@@ -9,9 +13,13 @@
 
     script.onload = function() {
         window.TelegramWebApp = {
+            // Основные свойства
             tg: window.Telegram?.WebApp,
             isBrowser: !window.Telegram || !window.Telegram.WebApp || window.Telegram.WebApp.platform === 'unknown',
             
+            /**
+             * Инициализация Telegram Web App
+             */
             init: function() {
                 console.log('🔍 Определение платформы...');
                 console.log('🌐 window.Telegram:', !!window.Telegram);
@@ -40,10 +48,13 @@
                 // Получение данных пользователя
                 this.getUserData();
                 
-                console.log('Telegram WebApp инициализирован');
+                console.log('✅ Telegram WebApp инициализирован');
             },
 
-            // Новая функция для более точного определения среды Telegram
+            /**
+             * Определение среды Telegram
+             * @returns {boolean} true если в Telegram Web App
+             */
             detectTelegramEnvironment: function() {
                 // Проверка наличия Telegram Web App API
                 if (window.Telegram && window.Telegram.WebApp) {
@@ -70,10 +81,12 @@
                 return false;
             },
 
+            /**
+             * Настройка темы Telegram
+             */
             setupTheme: function() {
                 if (!this.tg) return;
                 
-                // Адаптация под тему Telegram
                 const root = document.documentElement;
                 const theme = this.tg.themeParams;
                 
@@ -94,6 +107,9 @@
                 }
             },
 
+            /**
+             * Настройка кнопок Telegram
+             */
             setupButtons: function() {
                 if (!this.tg) return;
                 
@@ -105,12 +121,16 @@
                 this.tg.BackButton.hide();
             },
 
+            /**
+             * Получение данных пользователя
+             * @returns {Object|null} Данные пользователя или null
+             */
             getUserData: function() {
                 if (!this.tg) return null;
                 
                 const user = this.tg.initDataUnsafe?.user;
                 if (user) {
-                    console.log('Telegram User:', user);
+                    console.log('👤 Telegram User:', user);
                     return {
                         id: user.id,
                         first_name: user.first_name,
@@ -122,6 +142,11 @@
                 return null;
             },
 
+            /**
+             * Показать главную кнопку
+             * @param {string} text - Текст кнопки
+             * @param {Function} callback - Обработчик клика
+             */
             showMainButton: function(text, callback) {
                 if (!this.tg) return;
                 
@@ -134,11 +159,18 @@
                 }
             },
 
+            /**
+             * Скрыть главную кнопку
+             */
             hideMainButton: function() {
                 if (!this.tg) return;
                 this.tg.MainButton.hide();
             },
 
+            /**
+             * Показать кнопку назад
+             * @param {Function} callback - Обработчик клика
+             */
             showBackButton: function(callback) {
                 if (!this.tg || !this.tg.BackButton) return;
                 
@@ -157,6 +189,9 @@
                 }
             },
 
+            /**
+             * Скрыть кнопку назад
+             */
             hideBackButton: function() {
                 if (!this.tg || !this.tg.BackButton) return;
                 try {
@@ -166,11 +201,19 @@
                 }
             },
 
+            /**
+             * Отправить данные в Telegram
+             * @param {Object} data - Данные для отправки
+             */
             sendData: function(data) {
                 if (!this.tg) return;
                 this.tg.sendData(JSON.stringify(data));
             },
 
+            /**
+             * Показать алерт
+             * @param {string} message - Сообщение
+             */
             showAlert: function(message) {
                 // В браузере всегда используем обычный alert
                 if (this.isBrowser) {
@@ -193,6 +236,11 @@
                 }
             },
 
+            /**
+             * Показать подтверждение
+             * @param {string} message - Сообщение
+             * @param {Function} callback - Обработчик результата
+             */
             showConfirm: function(message, callback) {
                 if (!this.tg) {
                     if (confirm(message)) {
@@ -205,6 +253,10 @@
                 this.tg.showConfirm(message, callback);
             },
 
+            /**
+             * Тактильная обратная связь
+             * @param {string} type - Тип обратной связи ('light', 'medium', 'heavy')
+             */
             hapticFeedback: function(type) {
                 // В браузере тактильная обратная связь недоступна
                 if (this.isBrowser) {
@@ -226,7 +278,10 @@
                 }
             },
 
-            // Централизованная функция для получения Telegram ID
+            /**
+             * Получить ID пользователя
+             * @returns {number} ID пользователя
+             */
             getUserId: function() {
                 if (this.tg?.initDataUnsafe?.user?.id) {
                     return this.tg.initDataUnsafe.user.id;
@@ -235,9 +290,13 @@
                 return testId ? parseInt(testId) : 123456789;
             },
 
-            // Унифицированная обработка ошибок API
+            /**
+             * Обработка ошибок API
+             * @param {Error} error - Ошибка
+             * @param {string} defaultMessage - Сообщение по умолчанию
+             */
             handleError: function(error, defaultMessage = 'Произошла ошибка') {
-                console.error('API Error:', error);
+                console.error('❌ API Error:', error);
                 const message = error?.message || error?.error || error?.detail || defaultMessage;
                 
                 // Безопасный вызов showAlert без падения
@@ -249,16 +308,25 @@
                 }
             },
 
-            // Проверка доступности в Telegram среде  
+            /**
+             * Проверка доступности в Telegram среде
+             * @returns {boolean} true если в Telegram Web App
+             */
             isInTelegramWebApp: function() {
                 return !!(window.Telegram?.WebApp || window.TelegramWebApp?.tg);
             },
 
+            /**
+             * Расширить viewport
+             */
             expandViewport: function() {
                 if (!this.tg) return;
                 this.tg.expand();
             },
 
+            /**
+             * Закрыть приложение
+             */
             close: function() {
                 if (!this.tg) {
                     window.close();
@@ -267,6 +335,10 @@
                 this.tg.close();
             },
 
+            /**
+             * Открыть ссылку в Telegram
+             * @param {string} url - URL для открытия
+             */
             openTelegramLink: function(url) {
                 if (!this.tg) {
                     window.open(url, '_blank');
@@ -275,6 +347,10 @@
                 this.tg.openTelegramLink(url);
             },
 
+            /**
+             * Открыть ссылку
+             * @param {string} url - URL для открытия
+             */
             openLink: function(url) {
                 if (!this.tg) {
                     window.open(url, '_blank');
@@ -283,6 +359,10 @@
                 this.tg.openLink(url);
             },
 
+            /**
+             * Проверка нахождения в Telegram
+             * @returns {boolean} true если в Telegram
+             */
             isInTelegram: function() {
                 return !!this.tg;
             }
