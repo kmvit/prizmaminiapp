@@ -521,15 +521,23 @@ class DatabaseService:
                 user = result.scalar_one_or_none()
                 
                 if not user:
+                    logger.warning(f"⚠️ Пользователь {telegram_id} не найден при сбросе зависших отчетов")
                     return False
                 
                 from bot.database.models import ReportGenerationStatus
                 from datetime import datetime, timedelta
                 
+                logger.info(f"🔍 Проверка зависших отчетов для пользователя {telegram_id}")
+                logger.info(f"📊 Статус бесплатного отчета: {user.free_report_status}")
+                logger.info(f"📊 Статус премиум отчета: {user.premium_report_status}")
+                logger.info(f"⏰ Время начала генерации: {user.report_generation_started_at}")
+                
                 # Проверяем, не завис ли отчет в статусе PROCESSING
                 if user.report_generation_started_at:
                     # Если отчет генерируется больше 30 минут, считаем его зависшим
                     time_diff = datetime.utcnow() - user.report_generation_started_at
+                    logger.info(f"⏱️ Время с начала генерации: {time_diff}")
+                    
                     if time_diff > timedelta(minutes=30):
                         logger.warning(f"⚠️ Сбрасываем зависший отчет для пользователя {telegram_id} (время генерации: {time_diff})")
                         
@@ -537,18 +545,25 @@ class DatabaseService:
                             user.free_report_status = ReportGenerationStatus.PENDING
                             user.free_report_path = None
                             user.report_generation_error = "Отчет завис в процессе генерации"
+                            logger.info(f"✅ Сброшен зависший бесплатный отчет для пользователя {telegram_id}")
                         
                         if user.premium_report_status == ReportGenerationStatus.PROCESSING:
                             user.premium_report_status = ReportGenerationStatus.PENDING
                             user.premium_report_path = None
                             user.report_generation_error = "Отчет завис в процессе генерации"
+                            logger.info(f"✅ Сброшен зависший премиум отчет для пользователя {telegram_id}")
                         
                         await session.commit()
                         return True
+                    else:
+                        logger.info(f"📊 Отчет для пользователя {telegram_id} не считается зависшим (время: {time_diff})")
+                else:
+                    logger.info(f"📊 Нет времени начала генерации для пользователя {telegram_id}")
                 
                 return False
             except Exception as e:
                 await session.rollback()
+                logger.error(f"❌ Ошибка при сбросе зависших отчетов для пользователя {telegram_id}: {e}")
                 raise e
 
 # Создаем экземпляр сервиса
