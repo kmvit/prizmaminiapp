@@ -8,6 +8,9 @@ import decimal
 from bot.database.models import User, Question, Answer, Payment, Report, QuestionType, PaymentStatus, ReportGenerationStatus
 from bot.database.database import async_session
 from bot.config import FREE_QUESTIONS_LIMIT
+from bot.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 class DatabaseService:
     
