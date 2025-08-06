@@ -19,4 +19,7 @@ reportlab>=4.0.0
 httpx==0.25.2
 aiofiles==23.2.1
 PyPDF2==3.0.1
-reportlab==4.0.7 
+reportlab==4.0.7
+
+# HTTP клиент для Telegram API
+aiohttp>=3.9.0 

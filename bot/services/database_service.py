@@ -414,6 +414,8 @@ class DatabaseService:
             result = await session.execute(stmt)
             user = result.scalar_one()
             
+            logger.info(f"🔄 Обновление статуса отчета для пользователя {telegram_id}, тип: {report_type}, новый статус: {status.value}")
+            
             if report_type == "free":
                 user.free_report_status = status
                 if report_path:
@@ -434,6 +436,8 @@ class DatabaseService:
             
             user.updated_at = datetime.utcnow()
             await session.commit()
+            
+            logger.info(f"✅ Статус отчета обновлен для пользователя {telegram_id}, тип: {report_type}, статус: {status.value}")
             return user
     
     async def get_report_generation_status(self, telegram_id: int, report_type: str) -> dict:
@@ -444,31 +448,39 @@ class DatabaseService:
             user = result.scalar_one_or_none()
             
             if not user:
+                logger.warning(f"⚠️ Пользователь {telegram_id} не найден при получении статуса отчета")
                 return {"status": "user_not_found"}
             
             if report_type == "free":
-                return {
+                status_info = {
                     "status": user.free_report_status.value,
                     "report_path": user.free_report_path,
                     "error": user.report_generation_error,
                     "started_at": user.report_generation_started_at,
                     "completed_at": user.report_generation_completed_at
                 }
+                logger.info(f"📊 Статус бесплатного отчета для пользователя {telegram_id}: {status_info}")
+                return status_info
             elif report_type == "premium":
-                return {
+                status_info = {
                     "status": user.premium_report_status.value,
                     "report_path": user.premium_report_path,
                     "error": user.report_generation_error,
                     "started_at": user.report_generation_started_at,
                     "completed_at": user.report_generation_completed_at
                 }
+                logger.info(f"📊 Статус премиум отчета для пользователя {telegram_id}: {status_info}")
+                return status_info
             
+            logger.warning(f"⚠️ Неизвестный тип отчета: {report_type} для пользователя {telegram_id}")
             return {"status": "invalid_report_type"}
     
     async def is_report_generating(self, telegram_id: int, report_type: str) -> bool:
         """Проверить, генерируется ли отчет"""
         status_info = await self.get_report_generation_status(telegram_id, report_type)
-        return status_info.get("status") == ReportGenerationStatus.PROCESSING.value
+        is_generating = status_info.get("status") == ReportGenerationStatus.PROCESSING.value
+        logger.info(f"🔍 Проверка генерации отчета для пользователя {telegram_id}, тип: {report_type}, статус: {status_info.get('status')}, генерируется: {is_generating}")
+        return is_generating
     
     async def clear_report_statuses(self, telegram_id: int) -> bool:
         """Очистить статусы отчетов пользователя"""

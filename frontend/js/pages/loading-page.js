@@ -74,7 +74,7 @@ window.LoadingPage = {
                 }
             }
             
-            // Начинаем мониторинг статуса
+            // Начинаем мониторинг статуса с интервалом 30 секунд
             this.checkReportStatus();
             
         } catch (error) {
@@ -113,19 +113,19 @@ window.LoadingPage = {
             
             // Проверяем, генерируется ли отчет
             if (status.available_report && status.available_report.status === 'processing') {
-                console.log('⏳ Отчет генерируется, проверяем через 3 секунды');
+                console.log('⏳ Отчет генерируется, проверяем через 30 секунд');
                 setTimeout(() => {
                     this.checkReportStatus();
-                }, 3000);
+                }, 30000);
                 return;
             }
             
             // Проверяем премиум отчет в процессе генерации
             if (status.premium_report && status.premium_report.status === 'processing') {
-                console.log('⏳ Премиум отчет генерируется, проверяем через 3 секунды');
+                console.log('⏳ Премиум отчет генерируется, проверяем через 30 секунд');
                 setTimeout(() => {
                     this.checkReportStatus();
-                }, 3000);
+                }, 30000);
                 return;
             }
             
@@ -136,7 +136,7 @@ window.LoadingPage = {
                     // Начинаем мониторинг статуса
                     setTimeout(() => {
                         this.checkReportStatus();
-                    }, 3000);
+                    }, 30000);
                 }).catch(error => {
                     console.error('❌ Ошибка при запуске премиум генерации:', error);
                 });
@@ -152,10 +152,10 @@ window.LoadingPage = {
             
             // Если нет доступного отчета, но есть бесплатный отчет в процессе
             if (status.free_report && status.free_report.status === 'processing') {
-                console.log('⏳ Бесплатный отчет генерируется, проверяем через 3 секунды');
+                console.log('⏳ Бесплатный отчет генерируется, проверяем через 30 секунд');
                 setTimeout(() => {
                     this.checkReportStatus();
-                }, 3000);
+                }, 30000);
                 return;
             }
             
@@ -190,7 +190,7 @@ window.LoadingPage = {
                     // Начинаем мониторинг статуса
                     setTimeout(() => {
                         this.checkReportStatus();
-                    }, 3000);
+                    }, 30000);
                 }).catch(error => {
                     console.error('❌ Ошибка при запуске премиум генерации:', error);
                 });
@@ -201,10 +201,10 @@ window.LoadingPage = {
             
         } catch (error) {
             console.error('❌ Ошибка при проверке статуса отчета:', error);
-            // Повторяем проверку через 5 секунд
+            // Повторяем проверку через 30 секунд
             setTimeout(() => {
                 this.checkReportStatus();
-            }, 5000);
+            }, 30000);
         }
     }
 }; 

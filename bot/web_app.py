@@ -599,13 +599,39 @@ async def generate_report_background(telegram_id: int):
         if result.get("success"):
             report_path = result['report_file']
             logger.info(f"✅ Фоновая генерация отчета завершена успешно для пользователя {telegram_id}: {report_path}")
+            
+            # Отправляем уведомление в Telegram
+            from bot.services.telegram_service import telegram_service
+            await telegram_service.send_report_ready_notification(
+                telegram_id=telegram_id,
+                report_path=report_path,
+                is_premium=False
+            )
+            
             return report_path
         else:
-            logger.error(f"❌ Ошибка фоновой генерации отчета для пользователя {telegram_id}: {result.get('error')}")
+            error_msg = result.get('error', 'Неизвестная ошибка')
+            logger.error(f"❌ Ошибка фоновой генерации отчета для пользователя {telegram_id}: {error_msg}")
+            
+            # Отправляем уведомление об ошибке в Telegram
+            from bot.services.telegram_service import telegram_service
+            await telegram_service.send_error_notification(
+                telegram_id=telegram_id,
+                error_message=error_msg
+            )
+            
             return None
             
     except Exception as e:
         logger.error(f"❌ Критическая ошибка фоновой генерации отчета для пользователя {telegram_id}: {e}")
+        
+        # Отправляем уведомление об ошибке в Telegram
+        from bot.services.telegram_service import telegram_service
+        await telegram_service.send_error_notification(
+            telegram_id=telegram_id,
+            error_message=str(e)
+        )
+        
         return None
 
 # ПЛАТНАЯ ВЕРСИЯ - новые эндпоинты
@@ -985,7 +1011,10 @@ async def start_premium_report_generation(telegram_id: int, background_tasks: Ba
             return {"status": "payment_required", "message": "Для генерации премиум отчета требуется оплата."}
 
         # Проверяем, не генерируется ли уже отчет
-        if await db_service.is_report_generating(telegram_id, "premium"):
+        is_generating = await db_service.is_report_generating(telegram_id, "premium")
+        logger.info(f"🔍 Проверка генерации премиум отчета для пользователя {telegram_id}: {is_generating}")
+        
+        if is_generating:
             logger.info(f"⏳ Отчет уже генерируется для пользователя {telegram_id}")
             return {"status": "already_processing", "message": "Отчет уже генерируется. Проверьте статус позже."}
 
@@ -1176,6 +1205,14 @@ async def generate_premium_report_async(telegram_id: int):
             
             logger.info(f"✅ Асинхронная генерация ПЛАТНОГО отчета завершена успешно для пользователя {telegram_id}: {report_path}")
             
+            # Отправляем уведомление в Telegram
+            from bot.services.telegram_service import telegram_service
+            await telegram_service.send_report_ready_notification(
+                telegram_id=telegram_id,
+                report_path=report_path,
+                is_premium=True
+            )
+            
         else:
             error_msg = result.get('error', 'Неизвестная ошибка')
             
@@ -1187,6 +1224,13 @@ async def generate_premium_report_async(telegram_id: int):
                 error=error_msg
             )
             
+            # Отправляем уведомление об ошибке в Telegram
+            from bot.services.telegram_service import telegram_service
+            await telegram_service.send_error_notification(
+                telegram_id=telegram_id,
+                error_message=error_msg
+            )
+            
             logger.error(f"❌ Ошибка асинхронной генерации ПЛАТНОГО отчета для пользователя {telegram_id}: {error_msg}")
             
     except Exception as e:
@@ -1196,6 +1240,13 @@ async def generate_premium_report_async(telegram_id: int):
             "premium", 
             ReportGenerationStatus.FAILED, 
             error=str(e)
+        )
+        
+        # Отправляем уведомление об ошибке в Telegram
+        from bot.services.telegram_service import telegram_service
+        await telegram_service.send_error_notification(
+            telegram_id=telegram_id,
+            error_message=str(e)
         )
         
         logger.error(f"❌ Критическая ошибка асинхронной генерации ПЛАТНОГО отчета для пользователя {telegram_id}: {e}")
@@ -1390,6 +1441,7 @@ async def check_premium_report_status_with_user(telegram_id: int, user: User):
         
         # Получаем статус генерации из БД
         status_info = await db_service.get_report_generation_status(telegram_id, "premium")
+        logger.info(f"📊 Получен статус премиум отчета для пользователя {telegram_id}: {status_info}")
         
         if status_info.get("status") == "completed" and status_info.get("report_path"):
             return {
@@ -1406,6 +1458,7 @@ async def check_premium_report_status_with_user(telegram_id: int, user: User):
                 "error": status_info.get("error", "Неизвестная ошибка")
             }
         else:
+            logger.info(f"📊 Статус премиум отчета для пользователя {telegram_id}: not_started (статус из БД: {status_info.get('status')})")
             return {"status": "not_started", "message": "Генерация не запущена"}
             
     except Exception as e:
