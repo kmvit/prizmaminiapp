@@ -14,4 +14,8 @@ def setup_logger():
         retention="7 days",
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
         level="DEBUG"
-    ) 
+    )
+
+def get_logger(name: str):
+    """Получить логгер для указанного модуля"""
+    return logger.bind(name=name) 
