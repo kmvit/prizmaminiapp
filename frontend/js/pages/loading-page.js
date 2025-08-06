@@ -49,8 +49,19 @@ window.LoadingPage = {
             
             // Проверяем, есть ли уже готовый отчет
             if (status.available_report && status.available_report.status === 'ready') {
-                console.log('✅ Отчет уже готов, перенаправляем на download');
-                window.location.href = 'download.html';
+                console.log('✅ Отчет уже готов, проверяем тип пользователя');
+                
+                // Проверяем тип отчета
+                if (status.available_report.type === 'premium') {
+                    console.log('💎 Премиум отчет готов, перенаправляем на download');
+                    window.location.href = 'download.html';
+                } else if (status.available_report.type === 'free') {
+                    console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
+                    window.location.href = 'price-offer.html';
+                } else {
+                    console.log('❓ Неизвестный тип отчета, перенаправляем на price-offer');
+                    window.location.href = 'price-offer.html';
+                }
                 return;
             }
             
@@ -106,8 +117,19 @@ window.LoadingPage = {
             
             // Проверяем доступный отчет
             if (status.available_report && status.available_report.status === 'ready') {
-                console.log('✅ Отчет готов, перенаправляем на download');
-                window.location.href = 'download.html';
+                console.log('✅ Отчет готов, проверяем тип пользователя');
+                
+                // Проверяем тип отчета
+                if (status.available_report.type === 'premium') {
+                    console.log('💎 Премиум отчет готов, перенаправляем на download');
+                    window.location.href = 'download.html';
+                } else if (status.available_report.type === 'free') {
+                    console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
+                    window.location.href = 'price-offer.html';
+                } else {
+                    console.log('❓ Неизвестный тип отчета, перенаправляем на price-offer');
+                    window.location.href = 'price-offer.html';
+                }
                 return;
             }
             
