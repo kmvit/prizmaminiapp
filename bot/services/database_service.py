@@ -485,6 +485,58 @@ class DatabaseService:
         logger.info(f"🔍 Проверка генерации отчета для пользователя {telegram_id}, тип: {report_type}, статус: {status_info.get('status')}, генерируется: {is_generating}")
         return is_generating
     
+    async def reset_user_after_premium_report(self, telegram_id: int) -> bool:
+        """Сбросить состояние пользователя после отправки премиум-отчета в бот.
+        - Сбросить ответы
+        - Сбросить статусы отчетов
+        - Перевести пользователя в бесплатный статус (is_paid = False)
+        - Сбросить состояние теста
+        История платежей при этом НЕ меняется.
+        """
+        async with async_session() as session:
+            try:
+                stmt = select(User).where(User.telegram_id == telegram_id)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    logger.warning(f"⚠️ Пользователь {telegram_id} не найден при сбросе состояния")
+                    return False
+                
+                # 1) Удаляем ответы пользователя
+                from sqlalchemy import delete
+                await session.execute(delete(Answer).where(Answer.user_id == user.id))
+                
+                # 2) Сбрасываем статусы отчетов
+                from bot.database.models import ReportGenerationStatus as RGS
+                user.free_report_status = RGS.PENDING
+                user.premium_report_status = RGS.PENDING
+                user.free_report_path = None
+                user.premium_report_path = None
+                user.report_generation_error = None
+                user.report_generation_started_at = None
+                user.report_generation_completed_at = None
+                
+                # 3) Переводим пользователя в бесплатный статус
+                user.is_paid = False
+                if hasattr(user, "is_premium_paid"):
+                    user.is_premium_paid = False
+                
+                # 4) Сбрасываем состояние теста
+                user.test_completed = False
+                user.test_started_at = None
+                user.test_completed_at = None
+                user.current_question_id = None
+                
+                user.updated_at = datetime.utcnow()
+                await session.commit()
+                logger.info(f"✅ Состояние пользователя {telegram_id} успешно сброшено после отправки премиум-отчета")
+                return True
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"❌ Ошибка при сбросе состояния пользователя {telegram_id}: {e}")
+                raise e
+    
     async def clear_report_statuses(self, telegram_id: int) -> bool:
         """Очистить статусы отчетов пользователя"""
         async with async_session() as session:

@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
+import os
 from typing import Optional
 from datetime import datetime
 import decimal
@@ -1019,7 +1020,13 @@ async def start_premium_report_generation(telegram_id: int, background_tasks: Ba
         
         if is_generating:
             logger.info(f"⏳ Отчет уже генерируется для пользователя {telegram_id}")
-            return {"status": "already_processing", "message": "Отчет уже генерируется. Проверьте статус позже."}
+            # Дополнительно возвращаем ссылку на бота, чтобы фронт мог открыть бот с сообщением
+            bot_link = os.getenv("TELEGRAM_BOT_LINK", "https://t.me/myprizma_bot")
+            return {
+                "status": "already_processing",
+                "message": "Ваш премиум-отчет уже генерируется. Мы пришлем его в бот, как будет готов.",
+                "bot_link": bot_link
+            }
 
         # Обновляем статус в БД
         await db_service.update_report_generation_status(
@@ -1210,11 +1217,17 @@ async def generate_premium_report_async(telegram_id: int):
             
             # Отправляем уведомление в Telegram
             from bot.services.telegram_service import telegram_service
-            await telegram_service.send_report_ready_notification(
+            sent = await telegram_service.send_report_ready_notification(
                 telegram_id=telegram_id,
                 report_path=report_path,
                 is_premium=True
             )
+            # Если успешно отправили в бот, можно обнулить состояние пользователя
+            if sent:
+                try:
+                    await db_service.reset_user_after_premium_report(telegram_id)
+                except Exception as e:
+                    logger.error(f"⚠️ Не удалось сбросить состояние пользователя {telegram_id} после отправки отчета: {e}")
             
         else:
             error_msg = result.get('error', 'Неизвестная ошибка')

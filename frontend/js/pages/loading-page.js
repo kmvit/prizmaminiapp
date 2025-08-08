@@ -72,7 +72,18 @@ window.LoadingPage = {
             if (user && user.is_paid) {
                 // Пользователь оплатил премиум - запускаем генерацию премиум отчета
                 console.log('💎 Запускаем генерацию премиум отчета');
-                await ApiClient.generatePremiumReport(telegramId);
+                const startResp = await ApiClient.generatePremiumReport(telegramId);
+                if (startResp && (startResp.status === 'already_processing' || startResp.status === 'processing')) {
+                    const msg = 'Ваш премиум-отчет уже генерируется. Мы пришлем его вам в боте, как только он будет готов.';
+                    console.log('ℹ️ ' + msg);
+                    try { window.TelegramWebApp?.showAlert(msg); } catch (_) {}
+                    // Если пришла ссылка на бота - открываем
+                    if (startResp.bot_link) {
+                        try { window.TelegramWebApp?.openTelegramLink(startResp.bot_link); } catch (_) {}
+                    }
+                    // Завершаем дальнейшую генерацию/проверки и выходим
+                    return;
+                }
             } else {
                 // Пользователь не оплатил - запускаем генерацию бесплатного отчета
                 console.log('🆓 Запускаем генерацию бесплатного отчета');
@@ -123,28 +134,21 @@ window.LoadingPage = {
                 if (status.available_report.type === 'premium') {
                     console.log('💎 Премиум отчет готов, перенаправляем на download');
                     window.location.href = 'download.html';
+                    return;
                 } else if (status.available_report.type === 'free') {
                     console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
                     window.location.href = 'price-offer.html';
+                    return;
                 } else {
                     console.log('❓ Неизвестный тип отчета, перенаправляем на price-offer');
                     window.location.href = 'price-offer.html';
+                    return;
                 }
-                return;
             }
             
-            // Проверяем, генерируется ли отчет
-            if (status.available_report && status.available_report.status === 'processing') {
-                console.log('⏳ Отчет генерируется, проверяем через 30 секунд');
-                setTimeout(() => {
-                    this.checkReportStatus();
-                }, 30000);
-                return;
-            }
-            
-            // Проверяем премиум отчет в процессе генерации
+            // Проверяем, генерируется ли премиум-отчет
             if (status.premium_report && status.premium_report.status === 'processing') {
-                console.log('⏳ Премиум отчет генерируется, проверяем через 30 секунд');
+                console.log('⏳ Отчет генерируется, проверяем через 30 секунд');
                 setTimeout(() => {
                     this.checkReportStatus();
                 }, 30000);
