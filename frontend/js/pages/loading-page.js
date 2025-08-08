@@ -68,10 +68,11 @@ window.LoadingPage = {
             }
             
             // Определяем какой отчет нужно генерировать
-            const user = status.user;
-            console.log('💰 Статус оплаты пользователя:', user);
+            const user = status;
+            // В ответе есть флаги is_paid в корневом объекте и внутри available_report
+            console.log('💰 Статус оплаты пользователя:', { is_paid: status.is_paid, available_report: status.available_report });
             
-            if (user && user.is_paid) {
+            if (status.is_paid || (status.available_report && status.available_report.type === 'premium')) {
                 // Пользователь оплатил премиум - запускаем генерацию премиум отчета
                 console.log('💎 Запускаем генерацию премиум отчета');
                 const startResp = await ApiClient.generatePremiumReport(telegramId);
@@ -158,7 +159,7 @@ window.LoadingPage = {
             }
             
             // Проверяем, генерируется ли премиум-отчет
-            if (status.premium_report && status.premium_report.status === 'processing') {
+            if (status.premium_report_status && status.premium_report_status.status === 'processing') {
                 console.log('⏳ Премиум отчет генерируется — информируем пользователя и закрываем приложение');
                 try { window.TelegramWebApp?.showAlert('Ваш премиум-отчет уже генерируется. Мы пришлем его вам в боте, как только он будет готов.'); } catch (_) {}
                 try { window.TelegramWebApp?.close(); } catch (_) { try { window.close(); } catch (e) {} }
@@ -166,7 +167,7 @@ window.LoadingPage = {
             }
             
             // Проверяем статус premium_paid от бесплатного отчета
-            if (status.free_report && status.free_report.status === 'premium_paid') {
+            if (status.free_report_status && status.free_report_status.status === 'premium_paid') {
                 console.log('💎 Пользователь оплатил премиум, запускаем премиум генерацию');
                 ApiClient.generatePremiumReport(telegramId).then(() => {
                     // Начинаем мониторинг статуса
@@ -180,14 +181,14 @@ window.LoadingPage = {
             }
             
             // Проверяем статус payment_required от премиум отчета
-            if (status.premium_report && status.premium_report.status === 'payment_required') {
+            if (status.premium_report_status && status.premium_report_status.status === 'payment_required') {
                 console.log('💰 Требуется оплата для премиум отчета, перенаправляем на оплату');
                 window.location.href = 'price.html';
                 return;
             }
             
             // Если нет доступного отчета, но есть бесплатный отчет в процессе
-            if (status.free_report && status.free_report.status === 'processing') {
+            if (status.free_report_status && status.free_report_status.status === 'processing') {
                 console.log('⏳ Бесплатный отчет генерируется — информируем пользователя и закрываем приложение');
                 try { window.TelegramWebApp?.showAlert('Ваш отчет уже генерируется. Мы пришлем его вам в боте, как только он будет готов.'); } catch (_) {}
                 try { window.TelegramWebApp?.close(); } catch (_) { try { window.close(); } catch (e) {} }

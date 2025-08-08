@@ -1060,12 +1060,8 @@ async def download_premium_personal_report(telegram_id: int, download: Optional[
         logger.info(f"📁 Запрос скачивания ПЛАТНОГО отчета для пользователя {telegram_id}")
         logger.info(f"📊 Параметры: download={download}, method={method}, t={t}")
         
-        # Проверяем, что пользователь завершил тест
+        # Получаем пользователя (для проверки оплаты)
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
-        
-        if not user.test_completed:
-            logger.warning(f"⚠️ Пользователь {telegram_id} не завершил тест")
-            raise HTTPException(status_code=400, detail="Тест не завершен. Завершите тест для получения платного отчета.")
         
         # Проверяем, оплатил ли пользователь премиум отчет
         if not user.is_paid:
