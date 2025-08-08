@@ -13,9 +13,6 @@
 FAQ answers.html
 
 
-BEGIN TRANSACTION;
-
-BEGIN TRANSACTION;
 
 UPDATE users
 SET

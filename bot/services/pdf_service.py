@@ -1016,10 +1016,17 @@ class ReportGenerator:
         
         # Создаем кастомную титульную страницу с данными пользователя
         if title_pdf.exists():
-            # Получаем имя пользователя
-            user_name = user.first_name or user.username or f"Пользователь {user.telegram_id}"
-            if user.last_name:
+            # Получаем имя пользователя (приоритет: user.name -> "first last" -> first_name -> username -> fallback)
+            if user.name and user.name.strip():
+                user_name = user.name.strip()
+            elif user.first_name and user.last_name:
                 user_name = f"{user.first_name} {user.last_name}"
+            elif user.first_name:
+                user_name = user.first_name
+            elif user.username:
+                user_name = user.username
+            else:
+                user_name = f"Пользователь {user.telegram_id}"
             
             # Форматируем дату
             completion_date = datetime.utcnow().strftime("%d.%m.%Y")
