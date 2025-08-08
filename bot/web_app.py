@@ -1063,17 +1063,17 @@ async def download_premium_personal_report(telegram_id: int, download: Optional[
         # Получаем пользователя (для проверки оплаты)
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
-        # Проверяем, оплатил ли пользователь премиум отчет
-        if not user.is_paid:
-            logger.warning(f"⚠️ Пользователь {telegram_id} не оплатил премиум отчет")
-            raise HTTPException(status_code=403, detail="Для доступа к премиум отчету требуется оплата.")
-        
-        # Ищем готовый платный отчет пользователя
+        # Ищем готовый платный отчет пользователя (если файл уже есть — разрешаем скачивание независимо от статуса is_paid)
         reports_dir = Path("reports")
         pattern = f"prizma_premium_report_{telegram_id}_*.pdf"
         report_files = glob.glob(str(reports_dir / pattern))
         
         if not report_files:
+            # Если файла нет, проверяем оплату
+            if not user.is_paid:
+                logger.warning(f"⚠️ Пользователь {telegram_id} не оплатил премиум отчет и файл не найден")
+                raise HTTPException(status_code=403, detail="Для доступа к премиум отчету требуется оплата.")
+            
             logger.warning(f"⚠️ Платный отчет для пользователя {telegram_id} не найден, запускаем генерацию...")
             
             # Запускаем генерацию платного отчета и ждем завершения
