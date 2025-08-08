@@ -107,8 +107,12 @@ window.PricePage = {
             
             // Проверяем, заполнил ли пользователь профиль
             const profile = await ApiClient.getUserProfile(telegramId);
-            
-            if (profile && profile.user && profile.user.name) {
+            const user = profile && profile.user ? profile.user : null;
+            const hasName = !!(user && user.name && String(user.name).trim());
+            const hasAge = !!(user && typeof user.age === 'number' && user.age > 0);
+            const hasGender = !!(user && user.gender);
+
+            if (hasName && hasAge && hasGender) {
                 // Профиль заполнен, идем к вопросам
                 window.location.href = 'question.html?type=free';
             } else {
@@ -144,7 +148,11 @@ window.PricePage = {
             
             if (profile && profile.payment_status === 'completed') {
                 // Пользователь уже оплатил, проверяем профиль
-                if (profile.user && profile.user.name) {
+                const user = profile && profile.user ? profile.user : null;
+                const hasName = !!(user && user.name && String(user.name).trim());
+                const hasAge = !!(user && typeof user.age === 'number' && user.age > 0);
+                const hasGender = !!(user && user.gender);
+                if (hasName && hasAge && hasGender) {
                     // Профиль заполнен, идем к вопросам
                     console.log('✅ Пользователь оплатил и профиль заполнен, перенаправляем на вопросы');
                     this.safeHapticFeedback('light');
@@ -204,11 +212,23 @@ window.PricePage = {
             console.log('💳 Статус платежа:', status);
             
             if (status && status.payment_status === 'completed') {
-                console.log('✅ Платеж завершен, перенаправляем на question');
-                // Небольшая задержка для лучшего UX
-                setTimeout(() => {
-                    window.location.href = 'question.html';
-                }, 100);
+                // Если оплата завершена, но профиль не заполнен — отправляем на login
+                const user = status && status.user ? status.user : null;
+                const hasName = !!(user && user.name && String(user.name).trim());
+                const hasAge = !!(user && typeof user.age === 'number' && user.age > 0);
+                const hasGender = !!(user && user.gender);
+
+                if (!hasName || !hasAge || !hasGender) {
+                    console.log('✅ Оплачено, но профиль не заполнен — редирект на login');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 100);
+                } else {
+                    console.log('✅ Платеж завершен и профиль заполнен, перенаправляем на question');
+                    setTimeout(() => {
+                        window.location.href = 'question.html';
+                    }, 100);
+                }
                 return;
             }
             

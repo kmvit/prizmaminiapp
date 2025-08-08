@@ -132,9 +132,16 @@ window.LoadingPage = {
                 
                 // Проверяем тип отчета
                 if (status.available_report.type === 'premium') {
-                    console.log('💎 Премиум отчет готов, перенаправляем на download');
-                    window.location.href = 'download.html';
-                    return;
+                    // Дополнительно проверяем, что премиум действительно READY и есть путь к PDF
+                    if (status.premium_report && status.premium_report.status === 'ready' && status.premium_report.report_path && status.premium_report.report_path.endsWith('.pdf')) {
+                        console.log('💎 Премиум отчет готов, перенаправляем на download');
+                        window.location.href = 'download.html';
+                        return;
+                    } else {
+                        console.log('⏳ Премиум еще не готов (или нет PDF), остаемся на загрузке');
+                        setTimeout(() => { this.checkReportStatus(); }, 15000);
+                        return;
+                    }
                 } else if (status.available_report.type === 'free') {
                     console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
                     window.location.href = 'price-offer.html';

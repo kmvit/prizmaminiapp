@@ -13,13 +13,18 @@ window.QuestionPage = {
     init() {
         console.log('❓ Инициализация страницы вопросов');
         
-        this.setupTelegramUI();
-        this.setupUI();
-        this.loadCurrentQuestion();
-        this.setupEventHandlers();
-        
-        // Инициализируем состояние кнопки
-        this.updateButtonState();
+        // Сначала проверяем заполненность профиля. Если не заполнен — редирект на login
+        this.ensureProfileOrRedirect().then((ok) => {
+            if (!ok) return;
+
+            this.setupTelegramUI();
+            this.setupUI();
+            this.loadCurrentQuestion();
+            this.setupEventHandlers();
+            
+            // Инициализируем состояние кнопки
+            this.updateButtonState();
+        });
     },
 
     /**
@@ -39,6 +44,33 @@ window.QuestionPage = {
      */
     setupUI() {
         UIHelpers.setupTextareaFocus();
+    },
+
+    /**
+     * Проверка заполненности профиля
+     * Если профиль неполный, перенаправляем на login.html
+     */
+    async ensureProfileOrRedirect() {
+        try {
+            const telegramId = window.TelegramWebApp ? window.TelegramWebApp.getUserId() : 123456789;
+            const profile = await ApiClient.getUserProfile(telegramId);
+            const user = profile && profile.user ? profile.user : null;
+            const hasName = !!(user && user.name && String(user.name).trim());
+            const hasAge = !!(user && typeof user.age === 'number' && user.age > 0);
+            const hasGender = !!(user && user.gender);
+
+            if (!hasName || !hasAge || !hasGender) {
+                console.log('👤 Профиль не заполнен, перенаправляем на login');
+                window.location.href = 'login.html';
+                return false;
+            }
+            return true;
+        } catch (error) {
+            console.error('❌ Ошибка при проверке профиля:', error);
+            // В случае ошибки подстраховываемся и отправляем на login
+            window.location.href = 'login.html';
+            return false;
+        }
     },
 
     /**

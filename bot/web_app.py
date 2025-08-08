@@ -1296,7 +1296,7 @@ async def check_user_reports_status(telegram_id: int):
         # Определяем какой отчет доступен для скачивания
         available_report = None
         
-        if user.is_paid and premium_report_status.get('status') == 'ready':
+        if user.is_paid and premium_report_status.get('status') == 'ready' and premium_report_status.get('report_path') and str(premium_report_status.get('report_path')).lower().endswith('.pdf'):
             # Если пользователь оплатил и премиум отчет готов
             available_report = {
                 "type": "premium",
@@ -1326,7 +1326,7 @@ async def check_user_reports_status(telegram_id: int):
                     "status": "premium_paid",
                     "message": "Для оплативших премиум пользователей используется премиум отчет"
                 }
-        elif premium_report_status.get('status') == 'processing':
+        elif premium_report_status.get('status') in ['processing', 'ready']:
             # Если премиум отчет в процессе генерации
             available_report = {
                 "type": "premium",
@@ -1437,7 +1437,11 @@ async def check_report_status_with_user(telegram_id: int, user: User):
                 
             # Находим последний файл по timestamp
             latest_report = max(report_files, key=extract_timestamp)
-            return {"status": "ready", "message": "Отчет готов к скачиванию", "report_path": latest_report}
+            # Дополнительная проверка существования файла
+            if os.path.exists(latest_report):
+                return {"status": "ready", "message": "Отчет готов к скачиванию", "report_path": latest_report}
+            else:
+                return {"status": "not_ready", "message": "Отчет еще не готов"}
         else:
             return {"status": "not_ready", "message": "Отчет еще не готов"}
             
@@ -1462,12 +1466,22 @@ async def check_premium_report_status_with_user(telegram_id: int, user: User):
         status_info = await db_service.get_report_generation_status(telegram_id, "premium")
         logger.info(f"📊 Получен статус премиум отчета для пользователя {telegram_id}: {status_info}")
         
+        # Если в БД COMPLETED – проверяем реальное наличие файла и что это именно PDF
         if status_info.get("status") == "COMPLETED" and status_info.get("report_path"):
-            return {
-                "status": "ready", 
-                "message": "Премиум отчет готов к скачиванию", 
-                "report_path": status_info["report_path"]
-            }
+            report_path = status_info["report_path"]
+            # Файл должен существовать и быть PDF
+            if os.path.exists(report_path) and report_path.lower().endswith('.pdf'):
+                return {
+                    "status": "ready", 
+                    "message": "Премиум отчет готов к скачиванию", 
+                    "report_path": report_path
+                }
+            else:
+                # Если файла нет или это не PDF (например .txt fallback) – считаем, что отчет еще не готов
+                return {
+                    "status": "processing",
+                    "message": "Премиум отчет еще генерируется"
+                }
         elif status_info.get("status") == "PROCESSING":
             return {"status": "processing", "message": "Отчет генерируется..."}
         elif status_info.get("status") == "FAILED":
