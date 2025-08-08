@@ -149,20 +149,29 @@ window.DownloadPage = {
                 return;
             }
             
-            // Проверяем, есть ли готовый отчет для скачивания
-            if (!status.available_report || status.available_report.status !== 'ready') {
-                // Дополнительная проверка бесплатного отчета
-                if (status.free_report && status.free_report.status === 'ready') {
-                    console.log('✅ Бесплатный отчет готов, остаемся на странице скачивания');
+            // Логика назначения страниц: download.html только для премиума
+            // Если готов премиум — остаемся здесь. Если готов только free — редирект на price-offer
+            if (status.available_report && status.available_report.status === 'ready') {
+                if (status.available_report.type === 'premium') {
+                    console.log('💎 Премиум отчет готов, остаемся на download');
+                    return;
+                } else if (status.available_report.type === 'free') {
+                    console.log('🆓 Готов только бесплатный отчет — перенаправляем на price-offer');
+                    window.location.href = 'price-offer.html';
                     return;
                 }
-                
-                console.log('❌ Отчет не готов, перенаправляем на loading');
-                window.location.href = 'loading.html';
+            }
+
+            // Если есть явный ready free_report — также отправляем на price-offer
+            if (status.free_report && status.free_report.status === 'ready') {
+                console.log('🆓 Бесплатный отчет готов — перенаправляем на price-offer');
+                window.location.href = 'price-offer.html';
                 return;
             }
-            
-            console.log('✅ Отчет готов, остаемся на странице скачивания');
+
+            console.log('❌ Отчет не готов, перенаправляем на loading');
+            window.location.href = 'loading.html';
+            return;
             
         } catch (error) {
             console.error('❌ Ошибка при проверке статуса отчетов:', error);

@@ -76,8 +76,13 @@ window.IndexPage = {
             
             // Проверяем, есть ли готовый отчет
             if (reportsStatus.available_report && reportsStatus.available_report.status === 'ready') {
-                console.log('✅ Отчет готов, перенаправляем на download');
-                window.location.href = 'download.html';
+                if (reportsStatus.available_report.type === 'premium') {
+                    console.log('✅ Премиум отчет готов, перенаправляем на download');
+                    window.location.href = 'download.html';
+                } else {
+                    console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
+                    window.location.href = 'price-offer.html';
+                }
                 return;
             }
             
