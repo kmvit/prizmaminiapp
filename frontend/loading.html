@@ -64,8 +64,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let progress = 0;
     
     function updateProgress() {
-        // Увеличиваем прогресс случайным образом
-        const increment = Math.random() * 2; // от 1 до 4%
+        // Делаем загрузку медленнее — увеличиваем прогресс очень медленно
+        // Прирост теперь от 0.05% до 0.2% за шаг, чтобы растянуть анимацию на 7 минут
+        const increment = 0.05 + Math.random() * 0.15; // от 0.05 до 0.2%
         progress = Math.min(progress + increment, 95); // максимум 95% пока не готов отчет
         
         // Обновляем визуал
@@ -74,7 +75,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Продолжаем анимацию если не достигли 95%
         if (progress < 95) {
-            setTimeout(updateProgress, 300 + Math.random() * 500); // случайная задержка 300-800мс
+            setTimeout(updateProgress, 500 + Math.random() * 1000); // случайная задержка 500-1500мс
         } else {
             // Проверяем готовность отчета
             checkReportStatus();
