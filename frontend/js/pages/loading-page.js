@@ -54,9 +54,11 @@ window.LoadingPage = {
                 // Проверяем тип отчета
                 if (status.available_report.type === 'premium') {
                     console.log('💎 Премиум отчет готов, перенаправляем на download');
+                    try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'premium', t: Date.now() })); } catch(_) {}
                     window.location.href = 'download.html';
                 } else if (status.available_report.type === 'free') {
                     console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
+                    try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'free', t: Date.now() })); } catch(_) {}
                     window.location.href = 'price-offer.html';
                 } else {
                     console.log('❓ Неизвестный тип отчета, перенаправляем на price-offer');
@@ -135,6 +137,7 @@ window.LoadingPage = {
                     // Дополнительно проверяем, что премиум действительно READY и есть путь к PDF
                     if (status.premium_report && status.premium_report.status === 'ready' && status.premium_report.report_path && status.premium_report.report_path.endsWith('.pdf')) {
                         console.log('💎 Премиум отчет готов, перенаправляем на download');
+                        try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'premium', t: Date.now() })); } catch(_) {}
                         window.location.href = 'download.html';
                         return;
                     } else {
@@ -144,6 +147,7 @@ window.LoadingPage = {
                     }
                 } else if (status.available_report.type === 'free') {
                     console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
+                    try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'free', t: Date.now() })); } catch(_) {}
                     window.location.href = 'price-offer.html';
                     return;
                 } else {
@@ -155,10 +159,9 @@ window.LoadingPage = {
             
             // Проверяем, генерируется ли премиум-отчет
             if (status.premium_report && status.premium_report.status === 'processing') {
-                console.log('⏳ Отчет генерируется, проверяем через 30 секунд');
-                setTimeout(() => {
-                    this.checkReportStatus();
-                }, 30000);
+                console.log('⏳ Премиум отчет генерируется — информируем пользователя и закрываем приложение');
+                try { window.TelegramWebApp?.showAlert('Ваш премиум-отчет уже генерируется. Мы пришлем его вам в боте, как только он будет готов.'); } catch (_) {}
+                try { window.TelegramWebApp?.close(); } catch (_) { try { window.close(); } catch (e) {} }
                 return;
             }
             
@@ -185,10 +188,9 @@ window.LoadingPage = {
             
             // Если нет доступного отчета, но есть бесплатный отчет в процессе
             if (status.free_report && status.free_report.status === 'processing') {
-                console.log('⏳ Бесплатный отчет генерируется, проверяем через 30 секунд');
-                setTimeout(() => {
-                    this.checkReportStatus();
-                }, 30000);
+                console.log('⏳ Бесплатный отчет генерируется — информируем пользователя и закрываем приложение');
+                try { window.TelegramWebApp?.showAlert('Ваш отчет уже генерируется. Мы пришлем его вам в боте, как только он будет готов.'); } catch (_) {}
+                try { window.TelegramWebApp?.close(); } catch (_) { try { window.close(); } catch (e) {} }
                 return;
             }
             

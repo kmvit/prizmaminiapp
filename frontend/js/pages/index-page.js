@@ -34,6 +34,23 @@ window.IndexPage = {
     async checkUserStatus() {
         try {
             const telegramId = window.TelegramWebApp ? window.TelegramWebApp.getUserId() : 123456789;
+
+            // Быстрый путь: если уже знаем, что отчет готов, не дергаем API повторно
+            try {
+                const cached = localStorage.getItem('prizma_report_ready');
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    if (data && data.type === 'premium') {
+                        console.log('📝 Кэш: премиум отчет готов — сразу на download');
+                        window.location.href = 'download.html';
+                        return;
+                    } else if (data && data.type === 'free') {
+                        console.log('📝 Кэш: бесплатный отчет готов — сразу на price-offer');
+                        window.location.href = 'price-offer.html';
+                        return;
+                    }
+                }
+            } catch (_) {}
             
             // Сначала проверяем статус отчетов
             const reportsStatus = await ApiClient.getReportsStatus(telegramId);
@@ -62,15 +79,17 @@ window.IndexPage = {
             
             // Проверяем, генерируется ли отчет
             if (reportsStatus.available_report && reportsStatus.available_report.status === 'processing') {
-                console.log('⏳ Отчет генерируется, перенаправляем на loading');
-                window.location.href = 'loading.html';
+                console.log('⏳ Отчет генерируется — показываем сообщение и закрываем приложение');
+                try { window.TelegramWebApp?.showAlert('Ваш отчет уже генерируется. Зайдите позже или мы пришлем его вам в боте, как только он будет готов.'); } catch (_) {}
+                try { window.TelegramWebApp?.close(); } catch (_) { try { window.close(); } catch (e) {} }
                 return;
             }
             
             // Проверяем премиум отчет в процессе генерации
             if (reportsStatus.premium_report && reportsStatus.premium_report.status === 'processing') {
-                console.log('⏳ Премиум отчет генерируется, перенаправляем на loading');
-                window.location.href = 'loading.html';
+                console.log('⏳ Премиум отчет генерируется — показываем сообщение и закрываем приложение');
+                try { window.TelegramWebApp?.showAlert('Ваш премиум-отчет уже генерируется. Зайдите позже или мы пришлем его вам в боте, как только он будет готов.'); } catch (_) {}
+                try { window.TelegramWebApp?.close(); } catch (_) { try { window.close(); } catch (e) {} }
                 return;
             }
             

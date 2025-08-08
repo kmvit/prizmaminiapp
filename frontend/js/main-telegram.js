@@ -63,6 +63,9 @@ $(function() {
             
             // Инициализация соответствующей страницы
             initPage(currentPage);
+
+            // Добавляем глобальную кнопку поддержки
+            addSupportButton();
         } else {
             console.log('⏳ TelegramWebApp not ready, retrying...');
             setTimeout(initTelegramApp, 100);
@@ -244,6 +247,45 @@ $(function() {
             appInitialized = true;
         } catch (error) {
             console.error('❌ Ошибка при инициализации TelegramApp:', error);
+        }
+    }
+
+    // ========================================
+    // ГЛОБАЛЬНАЯ КНОПКА ПОДДЕРЖКИ
+    // ========================================
+    function addSupportButton() {
+        try {
+            if (document.getElementById('supportButton')) {
+                return; // уже добавлена
+            }
+
+            const button = document.createElement('button');
+            button.id = 'supportButton';
+            button.className = 'support-button';
+            button.setAttribute('type', 'button');
+            button.setAttribute('aria-label', 'Служба поддержки');
+            button.innerHTML = '<span>Поддержка</span>';
+
+            button.addEventListener('click', () => {
+                try { window.TelegramWebApp?.hapticFeedback('light'); } catch (_) {}
+                const url = 'https://t.me/BelovaAlexa';
+                try {
+                    if (window.TelegramWebApp && typeof window.TelegramWebApp.openTelegramLink === 'function') {
+                        window.TelegramWebApp.openTelegramLink(url);
+                    } else if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openTelegramLink === 'function') {
+                        window.Telegram.WebApp.openTelegramLink(url);
+                    } else {
+                        window.open(url, '_blank');
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Не удалось открыть ссылку в Telegram, fallback на браузер');
+                    window.open(url, '_blank');
+                }
+            });
+
+            document.body.appendChild(button);
+        } catch (error) {
+            console.error('❌ Ошибка добавления кнопки поддержки:', error);
         }
     }
 

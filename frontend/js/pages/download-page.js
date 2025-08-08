@@ -154,9 +154,11 @@ window.DownloadPage = {
             if (status.available_report && status.available_report.status === 'ready') {
                 if (status.available_report.type === 'premium') {
                     console.log('💎 Премиум отчет готов, остаемся на download');
+                    try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'premium', t: Date.now() })); } catch(_) {}
                     return;
                 } else if (status.available_report.type === 'free') {
                     console.log('🆓 Готов только бесплатный отчет — перенаправляем на price-offer');
+                    try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'free', t: Date.now() })); } catch(_) {}
                     window.location.href = 'price-offer.html';
                     return;
                 }
