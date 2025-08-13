@@ -264,7 +264,11 @@ $(function() {
             button.className = 'support-button';
             button.setAttribute('type', 'button');
             button.setAttribute('aria-label', 'Служба поддержки');
-            button.innerHTML = '<span>Поддержка</span>';
+            button.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M12 2C6.477 2 2 6.03 2 10.997c0 2.86 1.53 5.41 3.934 7.121l-.507 3.36a1 1 0 0 0 1.45 1.05l3.844-1.922c.75.14 1.526.215 2.279.215 5.523 0 10-4.03 10-8.997S17.523 2 12 2Z" fill="white" fill-opacity="0.9"/>
+                    <path d="M8.5 9.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Zm7 0a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM8.75 13a3.25 3.25 0 0 0 6.5 0h-6.5Z" fill="#2b2d68"/>
+                </svg>`;
 
             button.addEventListener('click', () => {
                 try { window.TelegramWebApp?.hapticFeedback('light'); } catch (_) {}

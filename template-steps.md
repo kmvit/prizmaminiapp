@@ -14,6 +14,8 @@ FAQ answers.html
 
 
 
+BEGIN TRANSACTION;
+
 UPDATE users
 SET
   is_paid = 0,
