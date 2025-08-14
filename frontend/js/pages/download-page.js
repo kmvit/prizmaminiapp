@@ -148,17 +148,15 @@ window.DownloadPage = {
                 window.location.href = 'question.html';
                 return;
             }
-            
+
             // Логика назначения страниц: download.html только для премиума
             // Если готов премиум — остаемся здесь. Если готов только free — редирект на price-offer
             if (status.available_report && status.available_report.status === 'ready') {
                 if (status.available_report.type === 'premium') {
                     console.log('💎 Премиум отчет готов, остаемся на download');
-                    try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'premium', t: Date.now() })); } catch(_) {}
                     return;
                 } else if (status.available_report.type === 'free') {
                     console.log('🆓 Готов только бесплатный отчет — перенаправляем на price-offer');
-                    try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'free', t: Date.now() })); } catch(_) {}
                     window.location.href = 'price-offer.html';
                     return;
                 }
@@ -173,7 +171,7 @@ window.DownloadPage = {
 
             console.log('❌ Отчет не готов, перенаправляем на loading');
             window.location.href = 'loading.html';
-            return;
+            return
             
         } catch (error) {
             console.error('❌ Ошибка при проверке статуса отчетов:', error);
