@@ -13,18 +13,21 @@ window.QuestionPage = {
     init() {
         console.log('❓ Инициализация страницы вопросов');
         
-        // Сначала проверяем заполненность профиля. Если не заполнен — редирект на login
-        this.ensureProfileOrRedirect().then((ok) => {
-            if (!ok) return;
+        // Даем время на инициализацию Telegram WebApp
+        setTimeout(() => {
+            // Сначала проверяем заполненность профиля. Если не заполнен — редирект на login
+            this.ensureProfileOrRedirect().then((ok) => {
+                if (!ok) return;
 
-            this.setupTelegramUI();
-            this.setupUI();
-            this.loadCurrentQuestion();
-            this.setupEventHandlers();
-            
-            // Инициализируем состояние кнопки
-            this.updateButtonState();
-        });
+                this.setupTelegramUI();
+                this.setupUI();
+                this.loadCurrentQuestion();
+                this.setupEventHandlers();
+                
+                // Инициализируем состояние кнопки
+                this.updateButtonState();
+            });
+        }, 200); // Небольшая задержка для инициализации
     },
 
     /**
@@ -52,7 +55,8 @@ window.QuestionPage = {
      */
     async ensureProfileOrRedirect() {
         try {
-            const telegramId = window.TelegramWebApp ? window.TelegramWebApp.getUserId() : 123456789;
+            const telegramId = this.getTelegramUserId();
+            console.log('👤 Проверяем профиль для пользователя:', telegramId);
             const profile = await ApiClient.getUserProfile(telegramId);
             const user = profile && profile.user ? profile.user : null;
             const hasName = !!(user && user.name && String(user.name).trim());
@@ -74,12 +78,36 @@ window.QuestionPage = {
     },
 
     /**
+     * Получение Telegram ID пользователя
+     */
+    getTelegramUserId() {
+        let telegramId = 123456789; // Дефолтное значение для тестирования
+        
+        try {
+            if (window.TelegramWebApp && typeof window.TelegramWebApp.getUserId === 'function') {
+                telegramId = window.TelegramWebApp.getUserId();
+            } else if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+                telegramId = window.Telegram.WebApp.initDataUnsafe.user.id;
+            }
+            
+            console.log('👤 Получен Telegram ID:', telegramId);
+            return telegramId;
+        } catch (error) {
+            console.error('❌ Ошибка получения Telegram ID:', error);
+            return 123456789; // Fallback
+        }
+    },
+
+    /**
      * Загрузка текущего вопроса
      */
     async loadCurrentQuestion() {
         try {
-            const telegramId = window.TelegramWebApp ? window.TelegramWebApp.getUserId() : 123456789;
+            const telegramId = this.getTelegramUserId();
+            console.log('🔄 Загружаем вопрос для пользователя:', telegramId);
+            
             const questionData = await ApiClient.getCurrentQuestion(telegramId);
+            console.log('📥 Получены данные вопроса:', questionData);
             
             if (questionData) {
                 this.displayQuestion(questionData);
@@ -89,6 +117,12 @@ window.QuestionPage = {
             }
         } catch (error) {
             console.error('❌ Ошибка при загрузке вопроса:', error);
+            console.error('❌ Детали ошибки:', error.message, error.stack);
+            
+            // Показываем пользователю сообщение об ошибке
+            $('#questionText').text('Ошибка загрузки вопроса. Попробуйте обновить страницу.');
+            $('.current-question').text('?');
+            $('.question-count').text('?');
         }
     },
 
@@ -96,14 +130,57 @@ window.QuestionPage = {
      * Отображение вопроса
      */
     displayQuestion(data) {
+        console.log('📋 Отображаем данные вопроса:', JSON.stringify(data, null, 2));
+        
+        // Проверяем структуру данных
+        if (!data) {
+            console.error('❌ Нет данных вопроса');
+            return;
+        }
+        
+        if (!data.question) {
+            console.error('❌ Нет объекта question в данных:', data);
+            return;
+        }
+        
+        if (!data.progress) {
+            console.error('❌ Нет объекта progress в данных:', data);
+            return;
+        }
+        
+        // Проверяем наличие элементов DOM
+        const questionTextElement = $('#questionText');
+        const currentQuestionElement = $('.current-question');
+        const questionCountElement = $('.question-count');
+        
+        console.log('🔍 Проверка элементов DOM:');
+        console.log('  - questionText найден:', questionTextElement.length > 0);
+        console.log('  - current-question найден:', currentQuestionElement.length > 0);
+        console.log('  - question-count найден:', questionCountElement.length > 0);
+        
         // Обновляем текст вопроса
-        $('#questionText').text(data.question.text);
+        if (questionTextElement.length > 0) {
+            questionTextElement.text(data.question.text);
+            console.log('📝 Установлен текст вопроса:', data.question.text);
+        } else {
+            console.error('❌ Элемент #questionText не найден');
+        }
         
         // Обновляем номер текущего вопроса
-        $('.current-question').text(data.progress.current);
+        if (currentQuestionElement.length > 0) {
+            currentQuestionElement.text(data.progress.current);
+            console.log('🔢 Установлен номер вопроса:', data.progress.current);
+        } else {
+            console.error('❌ Элемент .current-question не найден');
+        }
         
         // Обновляем общее количество вопросов
-        $('.question-count').text(data.progress.total);
+        if (questionCountElement.length > 0) {
+            questionCountElement.text(data.progress.total);
+            console.log('📊 Установлено общее количество:', data.progress.total);
+        } else {
+            console.error('❌ Элемент .question-count не найден');
+        }
     },
 
     /**
@@ -243,7 +320,7 @@ window.QuestionPage = {
                 return;
             }
 
-            const telegramId = window.TelegramWebApp ? window.TelegramWebApp.getUserId() : 123456789;
+            const telegramId = this.getTelegramUserId();
             
             // Показываем индикатор загрузки
             UIHelpers.showLoadingIndicator();

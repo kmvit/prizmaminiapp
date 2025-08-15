@@ -74,11 +74,21 @@ class ApiClient {
      */
     static async getCurrentQuestion(userId) {
         try {
-            const response = await fetch(`${this.baseUrl}/user/${userId}/current-question`);
+            const url = `${this.baseUrl}/user/${userId}/current-question`;
+            console.log('🌐 Запрос к API:', url);
+            
+            const response = await fetch(url);
+            console.log('📡 Ответ API статус:', response.status);
+            
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                console.error('❌ Ошибка API:', response.status, errorText);
+                throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
             }
-            return await response.json();
+            
+            const data = await response.json();
+            console.log('📦 Данные от API:', data);
+            return data;
         } catch (error) {
             console.error('❌ Ошибка получения вопроса:', error);
             throw error;

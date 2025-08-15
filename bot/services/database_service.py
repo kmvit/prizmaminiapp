@@ -116,11 +116,8 @@ class DatabaseService:
             result = await session.execute(stmt)
             user = result.scalar_one()
             
-            # Если пользователь уже проходил тест и НЕ является премиум - удаляем старые ответы
-            if (user.test_completed or user.current_question_id) and not user.is_paid:
-                deleted_count = await self.clear_user_answers(telegram_id)
-                from loguru import logger
-                logger.info(f"🗑️ Удалено {deleted_count} старых ответов для пользователя {telegram_id}")
+            # НЕ удаляем старые ответы здесь - они нужны для генерации отчета
+            # Ответы будут удалены только после успешной генерации отчета
             
             # Получаем первый вопрос
             first_question = await self.get_first_question()
@@ -301,6 +298,26 @@ class DatabaseService:
             
             await session.commit()
             return deleted_count
+    
+    async def clear_user_data_after_report_generation(self, telegram_id: int) -> int:
+        """Очистить данные пользователя после успешной генерации отчета"""
+        async with async_session() as session:
+            # Получаем пользователя
+            stmt = select(User).where(User.telegram_id == telegram_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one()
+            
+            # Очищаем ответы только для бесплатных пользователей
+            if not user.is_paid:
+                deleted_count = await self.clear_user_answers(telegram_id)
+                from loguru import logger
+                logger.info(f"🗑️ Удалено {deleted_count} ответов после генерации отчета для пользователя {telegram_id}")
+                return deleted_count
+            else:
+                # Для платных пользователей не удаляем ответы
+                from loguru import logger
+                logger.info(f"💎 Для платного пользователя {telegram_id} ответы не удаляются")
+                return 0
 
     async def get_user_answers(self, telegram_id: int) -> List[Answer]:
         """Получить все ответы пользователя"""

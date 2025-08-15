@@ -601,6 +601,13 @@ async def generate_report_background(telegram_id: int):
             report_path = result['report_file']
             logger.info(f"✅ Фоновая генерация отчета завершена успешно для пользователя {telegram_id}: {report_path}")
             
+            # Очищаем данные пользователя после успешной генерации отчета
+            try:
+                deleted_count = await db_service.clear_user_data_after_report_generation(telegram_id)
+                logger.info(f"🗑️ Данные пользователя {telegram_id} очищены после генерации отчета: {deleted_count} ответов удалено")
+            except Exception as e:
+                logger.error(f"❌ Ошибка при очистке данных пользователя {telegram_id}: {e}")
+            
             # Отправляем уведомление в Telegram
             from bot.services.telegram_service import telegram_service
             await telegram_service.send_report_ready_notification(

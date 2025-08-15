@@ -39,6 +39,9 @@ window.LoadingPage = {
             // Сначала проверяем статус пользователя и отчетов
             const status = await ApiClient.getReportsStatus(telegramId);
             console.log('📊 Статус пользователя:', status);
+            console.log('📊 free_report_status:', status.free_report_status);
+            console.log('📊 premium_report_status:', status.premium_report_status);
+            console.log('📊 available_report:', status.available_report);
             
             // Если тест не завершен, перенаправляем на страницу с вопросами
             if (status.status === 'test_not_completed') {
@@ -72,6 +75,14 @@ window.LoadingPage = {
             // В ответе есть флаги is_paid в корневом объекте и внутри available_report
             console.log('💰 Статус оплаты пользователя:', { is_paid: status.is_paid, available_report: status.available_report });
             
+            // Проверяем, есть ли уже готовый отчет
+            if (status.free_report_status && status.free_report_status.status === 'ready') {
+                console.log('✅ Бесплатный отчет уже готов, перенаправляем на price-offer');
+                try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'free', t: Date.now() })); } catch(_) {}
+                window.location.href = 'price-offer.html';
+                return;
+            }
+            
             if (status.is_paid || (status.available_report && status.available_report.type === 'premium')) {
                 // Пользователь оплатил премиум - запускаем генерацию премиум отчета
                 console.log('💎 Запускаем генерацию премиум отчета');
@@ -91,6 +102,7 @@ window.LoadingPage = {
                 // Пользователь не оплатил - запускаем генерацию бесплатного отчета
                 console.log('🆓 Запускаем генерацию бесплатного отчета');
                 const result = await ApiClient.generateReport(telegramId);
+                console.log('📊 Результат генерации бесплатного отчета:', result);
                 
                 // Проверяем, не оплатил ли пользователь премиум
                 if (result.status === 'premium_paid') {
