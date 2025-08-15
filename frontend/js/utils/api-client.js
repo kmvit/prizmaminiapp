@@ -31,11 +31,21 @@ class ApiClient {
      */
     static async getUserProfile(userId) {
         try {
-            const response = await fetch(`${this.baseUrl}/user/${userId}/profile`);
+            const url = `${this.baseUrl}/user/${userId}/profile`;
+            console.log('🌐 Запрос профиля к API:', url);
+            
+            const response = await fetch(url);
+            console.log('📡 Ответ API статус:', response.status);
+            
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                console.error('❌ Ошибка API:', response.status, errorText);
+                throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
             }
-            return await response.json();
+            
+            const data = await response.json();
+            console.log('📦 Данные профиля от API:', data);
+            return data;
         } catch (error) {
             console.error('❌ Ошибка получения профиля:', error);
             throw error;
@@ -261,7 +271,7 @@ class ApiClient {
             console.error('❌ Ошибка сброса теста:', error);
             throw error;
         }
-    },
+    }
 
     /**
      * Остановить генерацию отчета

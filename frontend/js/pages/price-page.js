@@ -120,6 +120,7 @@ window.PricePage = {
             console.log('📡 Отправляем запрос к API...');
             
             // Проверяем, заполнил ли пользователь профиль
+            console.log('📡 Запрос профиля пользователя...');
             const profile = await ApiClient.getUserProfile(telegramId);
             console.log('📊 Получен профиль:', profile);
             
