@@ -104,6 +104,11 @@ async def get_current_question(telegram_id: int):
             else:
                 user = await db_service.start_test(telegram_id)
         
+        # Проверяем, завершен ли тест
+        if user.test_completed:
+            logger.info(f"✅ Тест для пользователя {telegram_id} уже завершен")
+            raise HTTPException(status_code=400, detail="Test already completed")
+        
         # Получаем текущий вопрос
         question = await db_service.get_question(user.current_question_id)
         
@@ -601,12 +606,7 @@ async def generate_report_background(telegram_id: int):
             report_path = result['report_file']
             logger.info(f"✅ Фоновая генерация отчета завершена успешно для пользователя {telegram_id}: {report_path}")
             
-            # Очищаем данные пользователя после успешной генерации отчета
-            try:
-                deleted_count = await db_service.clear_user_data_after_report_generation(telegram_id)
-                logger.info(f"🗑️ Данные пользователя {telegram_id} очищены после генерации отчета: {deleted_count} ответов удалено")
-            except Exception as e:
-                logger.error(f"❌ Ошибка при очистке данных пользователя {telegram_id}: {e}")
+            # НЕ удаляем данные пользователя - оставляем их для возможного повторного прохождения
             
             # Отправляем уведомление в Telegram
             from bot.services.telegram_service import telegram_service
@@ -680,6 +680,29 @@ async def check_premium_report_status(telegram_id: int):
     except Exception as e:
         logger.error(f"Error checking premium report status: {e}")
         return {"status": "error", "message": "Ошибка при проверке статуса платного отчета"}
+
+@app.post("/api/user/{telegram_id}/reset-test", summary="Сбросить тест пользователя")
+async def reset_user_test(telegram_id: int):
+    """Сбросить тест пользователя для повторного прохождения"""
+    try:
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        # Сбрасываем статус теста
+        user.test_completed = False
+        user.test_completed_at = None
+        user.current_question_id = None
+        user.test_started_at = None
+        
+        # Удаляем все ответы пользователя
+        deleted_count = await db_service.clear_user_answers(telegram_id)
+        
+        logger.info(f"🔄 Тест сброшен для пользователя {telegram_id}, удалено {deleted_count} ответов")
+        
+        return {"status": "success", "message": "Тест сброшен", "deleted_answers": deleted_count}
+        
+    except Exception as e:
+        logger.error(f"Error resetting test: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset test")
 
 @app.post("/api/user/{telegram_id}/start-premium-payment", summary="Начать процесс оплаты премиум отчета")
 async def start_premium_payment(telegram_id: int):

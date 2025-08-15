@@ -241,6 +241,29 @@ class ApiClient {
     }
 
     /**
+     * Сбросить тест пользователя
+     * @param {number} userId - ID пользователя
+     * @returns {Promise<Object>} Результат сброса
+     */
+    static async resetTest(userId) {
+        try {
+            const response = await fetch(`${this.baseUrl}/user/${userId}/reset-test`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('❌ Ошибка сброса теста:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Универсальный метод для HTTP запросов
      * @param {string} endpoint - Конечная точка API
      * @param {Object} options - Опции запроса
