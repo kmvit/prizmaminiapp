@@ -96,7 +96,10 @@ window.PricePage = {
      */
     async startFreeReport() {
         try {
+            console.log('🆓 Начинаем запуск бесплатного отчета...');
+            
             const telegramId = window.TelegramWebApp ? window.TelegramWebApp.getUserId() : 123456789;
+            console.log('👤 Получен Telegram ID:', telegramId);
             
             // Тактильная обратная связь
             if (window.TelegramWebApp) {
@@ -105,23 +108,41 @@ window.PricePage = {
 
             console.log('🆓 Запуск бесплатного отчета для пользователя:', telegramId);
             
+            // Проверяем доступность ApiClient
+            if (typeof ApiClient === 'undefined') {
+                console.error('❌ ApiClient недоступен');
+                if (window.TelegramWebApp) {
+                    window.TelegramWebApp.showAlert('Ошибка: ApiClient недоступен');
+                }
+                return;
+            }
+            
+            console.log('📡 Отправляем запрос к API...');
+            
             // Проверяем, заполнил ли пользователь профиль
             const profile = await ApiClient.getUserProfile(telegramId);
+            console.log('📊 Получен профиль:', profile);
+            
             const user = profile && profile.user ? profile.user : null;
             const hasName = !!(user && user.name && String(user.name).trim());
             const hasAge = !!(user && typeof user.age === 'number' && user.age > 0);
             const hasGender = !!(user && user.gender);
+            
+            console.log('🔍 Проверка профиля:', { hasName, hasAge, hasGender });
 
             if (hasName && hasAge && hasGender) {
                 // Профиль заполнен, идем к вопросам
+                console.log('✅ Профиль заполнен, перенаправляем на вопросы');
                 window.location.href = 'question.html?type=free';
             } else {
                 // Профиль не заполнен, идем к логину
+                console.log('⚠️ Профиль не заполнен, перенаправляем на логин');
                 window.location.href = 'login.html';
             }
             
         } catch (error) {
             console.error('❌ Ошибка при запуске бесплатного отчета:', error);
+            console.error('❌ Детали ошибки:', error.message, error.stack);
             if (window.TelegramWebApp) {
                 window.TelegramWebApp.showAlert('Ошибка при запуске бесплатного отчета. Попробуйте еще раз.');
             }
