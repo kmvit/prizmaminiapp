@@ -688,6 +688,23 @@ async def check_premium_report_status(telegram_id: int):
         logger.error(f"Error checking premium report status: {e}")
         return {"status": "error", "message": "Ошибка при проверке статуса платного отчета"}
 
+@app.post("/api/user/{telegram_id}/stop-report-generation", summary="Остановить генерацию отчета")
+async def stop_report_generation(telegram_id: int):
+    """Остановить генерацию отчета пользователя"""
+    try:
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        # Останавливаем генерацию премиум отчета
+        await db_service.update_report_generation_status(telegram_id, "premium", "PENDING")
+        
+        logger.info(f"🛑 Генерация премиум отчета остановлена для пользователя {telegram_id}")
+        
+        return {"status": "success", "message": "Генерация отчета остановлена"}
+        
+    except Exception as e:
+        logger.error(f"Error stopping report generation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to stop report generation")
+
 @app.post("/api/user/{telegram_id}/reset-test", summary="Сбросить тест пользователя")
 async def reset_user_test(telegram_id: int):
     """Сбросить тест пользователя для повторного прохождения"""

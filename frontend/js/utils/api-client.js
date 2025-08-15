@@ -261,6 +261,29 @@ class ApiClient {
             console.error('❌ Ошибка сброса теста:', error);
             throw error;
         }
+    },
+
+    /**
+     * Остановить генерацию отчета
+     * @param {number} userId - ID пользователя
+     * @returns {Promise<Object>} Результат остановки
+     */
+    static async stopReportGeneration(userId) {
+        try {
+            const response = await fetch(`${this.baseUrl}/user/${userId}/stop-report-generation`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('❌ Ошибка остановки генерации отчета:', error);
+            throw error;
+        }
     }
 
     /**
