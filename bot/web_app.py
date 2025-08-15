@@ -104,10 +104,17 @@ async def get_current_question(telegram_id: int):
             else:
                 user = await db_service.start_test(telegram_id)
         
-        # Проверяем, завершен ли тест
-        if user.test_completed:
-            logger.info(f"✅ Тест для пользователя {telegram_id} уже завершен")
+        # Проверяем, завершен ли тест (только для бесплатных пользователей)
+        if user.test_completed and not user.is_paid:
+            logger.info(f"✅ Бесплатный тест для пользователя {telegram_id} уже завершен")
             raise HTTPException(status_code=400, detail="Test already completed")
+        
+        # Для премиум пользователей сбрасываем флаг завершения, если нужно продолжить
+        if user.test_completed and user.is_paid:
+            logger.info(f"🔄 Премиум пользователь {telegram_id} продолжает тест после оплаты")
+            user.test_completed = False
+            user.test_completed_at = None
+            await db_service.update_user_test_status(telegram_id, False)
         
         # Получаем текущий вопрос
         question = await db_service.get_question(user.current_question_id)
@@ -805,7 +812,7 @@ async def handle_payment_success(invoice_id: int, request: Request):
             await db_service.update_payment_status(payment.id, PaymentStatus.COMPLETED)
             user = await db_service.get_user_by_id(payment.user_id)
             if user:
-                await db_service.upgrade_to_paid(user.telegram_id)
+                await db_service.upgrade_to_premium_and_continue_test(user.telegram_id)
 
         # Формируем URL для возврата в Web App
         telegram_webapp_url = f"{settings.TELEGRAM_WEBAPP_URL}?startapp=payment_success"
@@ -859,8 +866,8 @@ async def robokassa_result(request: Request):
             await db_service.update_payment_status(payment.id, PaymentStatus.COMPLETED)
             user = await db_service.get_user_by_id(payment.user_id)
             if user:
-                await db_service.upgrade_to_paid(user.telegram_id)
-                logger.info(f"✅ Платеж {inv_id} успешно завершен для пользователя {user.telegram_id}")
+                await db_service.upgrade_to_premium_and_continue_test(user.telegram_id)
+                logger.info(f"✅ Платеж {inv_id} успешно завершен для пользователя {user.telegram_id}, тест продолжен")
             else:
                 logger.error(f"❌ Пользователь с ID {payment.user_id} не найден")
             return f"OK{inv_id}"

@@ -126,6 +126,13 @@ window.QuestionPage = {
                 return;
             }
             
+            // Проверяем другие ошибки
+            if (error.message && error.message.includes('Test already completed')) {
+                console.log('✅ Тест завершен, перенаправляем на loading');
+                window.location.href = 'loading.html';
+                return;
+            }
+            
             // Показываем пользователю сообщение об ошибке
             $('#questionText').text('Ошибка загрузки вопроса. Попробуйте обновить страницу.');
             $('.current-question').text('?');

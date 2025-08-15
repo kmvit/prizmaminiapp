@@ -166,6 +166,69 @@ class DatabaseService:
             await session.commit()
             return user
     
+    async def upgrade_to_premium_and_continue_test(self, telegram_id: int) -> User:
+        """Обновить пользователя до премиум версии и продолжить тест"""
+        async with async_session() as session:
+            stmt = select(User).where(User.telegram_id == telegram_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one()
+            
+            # Обновляем статус на премиум
+            user.is_paid = True
+            user.updated_at = datetime.utcnow()
+            
+            # Сбрасываем флаг завершения теста, чтобы пользователь мог продолжить
+            user.test_completed = False
+            user.test_completed_at = None
+            
+            # Находим следующий вопрос после последнего отвеченного
+            answers = await self.get_user_answers(telegram_id)
+            if answers:
+                # Получаем все вопросы, на которые пользователь ответил
+                answered_questions = []
+                for answer in answers:
+                    question = await self.get_question(answer.question_id)
+                    if question:
+                        answered_questions.append(question)
+                
+                if answered_questions:
+                    # Находим вопрос с максимальным order_number
+                    last_question = max(answered_questions, key=lambda x: x.order_number)
+                    
+                    if last_question:
+                        next_question = await self.get_next_question(last_question.id, True)  # is_paid=True
+                        if next_question:
+                            # Устанавливаем следующий вопрос как текущий
+                            user.current_question_id = next_question.id
+                            from loguru import logger
+                            logger.info(f"🔄 Пользователь {telegram_id} продолжает премиум тест с вопроса {next_question.order_number}")
+                        else:
+                            # Если следующего вопроса нет, тест завершен
+                            user.test_completed = True
+                            user.test_completed_at = datetime.utcnow()
+                            from loguru import logger
+                            logger.info(f"✅ Премиум тест для пользователя {telegram_id} завершен")
+            
+            await session.commit()
+            return user
+    
+    async def update_user_test_status(self, telegram_id: int, test_completed: bool) -> User:
+        """Обновить статус завершения теста пользователя"""
+        async with async_session() as session:
+            stmt = select(User).where(User.telegram_id == telegram_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one()
+            
+            user.test_completed = test_completed
+            if test_completed:
+                user.test_completed_at = datetime.utcnow()
+            else:
+                user.test_completed_at = None
+            
+            user.updated_at = datetime.utcnow()
+            await session.commit()
+            return user
+    
     async def update_user_premium_status(self, telegram_id: int, is_premium_paid: bool) -> User:
         """Обновить статус is_premium_paid пользователя"""
         async with async_session() as session:
