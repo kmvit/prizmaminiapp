@@ -737,7 +737,7 @@ async def start_premium_payment(telegram_id: int):
             return {"status": "already_paid", "message": "Вы уже оплатили премиум отчет."}
 
         # Сумма оплаты (например, 1000 рублей)
-        amount_decimal = decimal.Decimal(10.00) # Ваша цена за премиум отчет
+        amount_decimal = decimal.Decimal(3590.00) # Ваша цена за премиум отчет
         amount_in_kopecks = int(amount_decimal * 100) # Преобразуем в копейки (целое число)
         description = f"Оплата премиум отчета для пользователя {telegram_id}"
 
