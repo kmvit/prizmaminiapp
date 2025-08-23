@@ -242,6 +242,23 @@ class DatabaseService:
             await session.commit()
             return user
 
+    async def update_user(self, telegram_id: int, update_data: dict) -> User:
+        """Обновить пользователя с произвольными полями"""
+        async with async_session() as session:
+            stmt = select(User).where(User.telegram_id == telegram_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one()
+            
+            # Обновляем поля из словаря
+            for field, value in update_data.items():
+                if hasattr(user, field):
+                    setattr(user, field, value)
+            
+            user.updated_at = datetime.utcnow()
+            
+            await session.commit()
+            return user
+
     # --- Работа с вопросами ---
     
     async def get_first_question(self) -> Question:

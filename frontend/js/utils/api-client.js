@@ -297,6 +297,47 @@ class ApiClient {
     }
 
     /**
+     * Получить таймер спецпредложения
+     * @param {number} userId - ID пользователя
+     * @returns {Promise<Object>} Информация о таймере
+     */
+    static async getSpecialOfferTimer(userId) {
+        try {
+            const response = await fetch(`${this.baseUrl}/user/${userId}/special-offer-timer`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('❌ Ошибка получения таймера спецпредложения:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Сбросить таймер спецпредложения
+     * @param {number} userId - ID пользователя
+     * @returns {Promise<Object>} Результат сброса
+     */
+    static async resetSpecialOfferTimer(userId) {
+        try {
+            const response = await fetch(`${this.baseUrl}/user/${userId}/reset-special-offer-timer`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('❌ Ошибка сброса таймера спецпредложения:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Универсальный метод для HTTP запросов
      * @param {string} endpoint - Конечная точка API
      * @param {Object} options - Опции запроса

@@ -63,6 +63,9 @@ class User(Base):
     report_generation_started_at = Column(DateTime, nullable=True)
     report_generation_completed_at = Column(DateTime, nullable=True)
     
+    # Таймер спецпредложения
+    special_offer_started_at = Column(DateTime, nullable=True)
+    
     # Связи
     answers = relationship("Answer", back_populates="user")
     payments = relationship("Payment", back_populates="user")

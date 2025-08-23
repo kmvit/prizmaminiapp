@@ -15,6 +15,7 @@ window.PriceOfferPage = {
         this.setupTelegramUI();
         this.checkPaymentStatusOnLoad();
         this.setupEventHandlers();
+        this.startSpecialOfferTimer();
     },
 
     /**
@@ -194,5 +195,131 @@ window.PriceOfferPage = {
         } else {
             alert(message);
         }
+    },
+
+    /**
+     * Запуск таймера спецпредложения
+     */
+    async startSpecialOfferTimer() {
+        try {
+            console.log('⏰ Запуск таймера спецпредложения');
+            
+            const telegramId = this.getTelegramUserId();
+            if (!telegramId) {
+                console.error('❌ Не удалось получить Telegram ID');
+                return;
+            }
+
+            // Получаем информацию о таймере с сервера
+            const timerData = await ApiClient.getSpecialOfferTimer(telegramId);
+            
+            if (timerData.status === 'success' && timerData.timer) {
+                // Обновляем таймер и цену
+                this.updateTimerDisplay(timerData.timer, timerData.pricing);
+                this.startCountdown(timerData.timer.remaining_seconds);
+            } else {
+                console.error('❌ Ошибка получения таймера:', timerData);
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка запуска таймера:', error);
+            // Показываем статичное время в случае ошибки
+            this.updateTimerDisplay({ time_string: '23:59:59', is_expired: false });
+        }
+    },
+
+    /**
+     * Обновление отображения таймера и цены
+     */
+    updateTimerDisplay(timer, pricing = null) {
+        const timeElement = document.querySelector('.decoding-offer-time');
+        if (timeElement) {
+            timeElement.textContent = timer.time_string;
+            
+            // Если время истекло, показываем 00:00:00
+            if (timer.is_expired) {
+                timeElement.textContent = '00:00:00';
+                timeElement.style.color = '#ff4444'; // Красный цвет для истекшего времени
+            } else {
+                timeElement.style.color = ''; // Возвращаем обычный цвет
+            }
+        }
+        
+        // Обновляем цену, если передана информация о ценообразовании
+        if (pricing) {
+            this.updatePricingDisplay(pricing);
+        }
+    },
+
+    /**
+     * Обновление отображения цены
+     */
+    updatePricingDisplay(pricing) {
+        const currentPriceElement = document.querySelector('.decoding-offer-button-current-price');
+        const oldPriceElement = document.querySelector('.decoding-offer-button-old-price');
+        
+        if (currentPriceElement) {
+            currentPriceElement.textContent = `${pricing.current_price.toLocaleString()}р`;
+        }
+        
+        if (oldPriceElement) {
+            if (pricing.is_offer_active) {
+                // Показываем старую цену зачеркнутой
+                oldPriceElement.innerHTML = `вместо <span>${pricing.original_price.toLocaleString()}р</span>`;
+                oldPriceElement.style.display = 'block';
+            } else {
+                // Скрываем старую цену, если спецпредложение истекло
+                oldPriceElement.style.display = 'none';
+            }
+        }
+        
+        console.log(`💰 Цена обновлена: ${pricing.current_price}р (спецпредложение: ${pricing.is_offer_active ? 'активно' : 'истекло'})`);
+    },
+
+    /**
+     * Запуск обратного отсчета
+     */
+    startCountdown(remainingSeconds) {
+        let totalSeconds = remainingSeconds;
+        const timeElement = document.querySelector('.decoding-offer-time');
+        
+        if (!timeElement) {
+            console.error('❌ Элемент таймера не найден');
+            return;
+        }
+
+        const updateCountdown = () => {
+            if (totalSeconds <= 0) {
+                // Время истекло
+                timeElement.textContent = '00:00:00';
+                timeElement.style.color = '#ff4444';
+                console.log('⏰ Время спецпредложения истекло');
+                
+                // Обновляем цену на полную
+                this.updatePricingDisplay({
+                    current_price: 6980,
+                    original_price: 6980,
+                    is_offer_active: false
+                });
+                return;
+            }
+
+            // Вычисляем часы, минуты и секунды
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            // Форматируем время
+            const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            timeElement.textContent = timeString;
+            totalSeconds--;
+
+            // Продолжаем отсчет каждую секунду
+            setTimeout(updateCountdown, 1000);
+        };
+
+        // Запускаем отсчет
+        updateCountdown();
     }
 }; 

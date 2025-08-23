@@ -736,8 +736,28 @@ async def start_premium_payment(telegram_id: int):
         if user.is_paid:
             return {"status": "already_paid", "message": "Вы уже оплатили премиум отчет."}
 
-        # Сумма оплаты (например, 1000 рублей)
-        amount_decimal = decimal.Decimal(3590.00) # Ваша цена за премиум отчет
+        # Получаем информацию о таймере спецпредложения
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        # Определяем цену в зависимости от таймера
+        if user.special_offer_started_at:
+            offer_duration = 86400  # 24 часа в секундах
+            elapsed_time = (datetime.utcnow() - user.special_offer_started_at).total_seconds()
+            is_offer_active = elapsed_time < offer_duration
+            
+            if is_offer_active:
+                # Спецпредложение активно - скидочная цена
+                amount_decimal = decimal.Decimal(3590.00)
+                logger.info(f"💰 Спецпредложение активно для пользователя {telegram_id}, цена: {amount_decimal}")
+            else:
+                # Спецпредложение истекло - полная цена
+                amount_decimal = decimal.Decimal(6980.00)
+                logger.info(f"💰 Спецпредложение истекло для пользователя {telegram_id}, цена: {amount_decimal}")
+        else:
+            # Таймер не запущен - полная цена
+            amount_decimal = decimal.Decimal(6980.00)
+            logger.info(f"💰 Таймер не запущен для пользователя {telegram_id}, цена: {amount_decimal}")
+        
         amount_in_kopecks = int(amount_decimal * 100) # Преобразуем в копейки (целое число)
         description = f"Оплата премиум отчета для пользователя {telegram_id}"
 
@@ -1547,6 +1567,86 @@ async def check_premium_report_status_with_user(telegram_id: int, user: User):
     except Exception as e:
         logger.error(f"Error checking premium report status: {e}")
         return {"status": "error", "message": "Ошибка при проверке статуса платного отчета"}
+
+@app.get("/api/user/{telegram_id}/special-offer-timer", summary="Получить таймер спецпредложения")
+async def get_special_offer_timer(telegram_id: int):
+    """Получить информацию о таймере спецпредложения для пользователя"""
+    try:
+        logger.info(f"⏰ Запрос таймера спецпредложения для пользователя {telegram_id}")
+        
+        # Получаем пользователя
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        # Если таймер еще не запущен, запускаем его
+        if not user.special_offer_started_at:
+            logger.info(f"🚀 Запуск таймера спецпредложения для пользователя {telegram_id}")
+            user.special_offer_started_at = datetime.utcnow()
+            await db_service.update_user(telegram_id, {"special_offer_started_at": user.special_offer_started_at})
+        
+        # Вычисляем оставшееся время (24 часа = 86400 секунд)
+        offer_duration = 86400  # 24 часа в секундах
+        elapsed_time = (datetime.utcnow() - user.special_offer_started_at).total_seconds()
+        remaining_time = max(0, offer_duration - elapsed_time)
+        
+        # Форматируем время в формат HH:MM:SS
+        hours = int(remaining_time // 3600)
+        minutes = int((remaining_time % 3600) // 60)
+        seconds = int(remaining_time % 60)
+        
+        time_string = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        
+        # Определяем цену в зависимости от таймера
+        if remaining_time > 0:
+            # Спецпредложение активно - скидочная цена
+            current_price = 3590
+            original_price = 6980
+            is_offer_active = True
+        else:
+            # Спецпредложение истекло - полная цена
+            current_price = 6980
+            original_price = 6980
+            is_offer_active = False
+        
+        return {
+            "status": "success",
+            "timer": {
+                "started_at": user.special_offer_started_at.isoformat(),
+                "remaining_seconds": int(remaining_time),
+                "time_string": time_string,
+                "is_expired": remaining_time <= 0
+            },
+            "pricing": {
+                "current_price": current_price,
+                "original_price": original_price,
+                "is_offer_active": is_offer_active
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting special offer timer: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get special offer timer")
+
+@app.post("/api/user/{telegram_id}/reset-special-offer-timer", summary="Сбросить таймер спецпредложения")
+async def reset_special_offer_timer(telegram_id: int):
+    """Сбросить таймер спецпредложения для пользователя (для тестирования)"""
+    try:
+        logger.info(f"🔄 Сброс таймера спецпредложения для пользователя {telegram_id}")
+        
+        # Получаем пользователя
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        # Сбрасываем таймер
+        user.special_offer_started_at = None
+        await db_service.update_user(telegram_id, {"special_offer_started_at": None})
+        
+        return {
+            "status": "success",
+            "message": "Таймер спецпредложения сброшен"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error resetting special offer timer: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset special offer timer")
 
 # Подключение статических файлов в конце (после всех API маршрутов)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
