@@ -1648,5 +1648,108 @@ async def reset_special_offer_timer(telegram_id: int):
         logger.error(f"Error resetting special offer timer: {e}")
         raise HTTPException(status_code=500, detail="Failed to reset special offer timer")
 
+from pydantic import BaseModel
+
+class NotificationTypeRequest(BaseModel):
+    notification_type: str
+
+@app.post("/api/user/{telegram_id}/send-special-offer-notification", summary="Отправить уведомление о спецпредложении")
+async def send_special_offer_notification(telegram_id: int, request: NotificationTypeRequest):
+    """Отправить уведомление о спецпредложении по таймеру"""
+    try:
+        logger.info(f"📱 Отправка уведомления о спецпредложении типа '{notification_type}' для пользователя {telegram_id}")
+        
+        # Импортируем telegram_service
+        from bot.services.telegram_service import telegram_service
+        
+        success = False
+        
+        # Отправляем соответствующее уведомление в зависимости от типа
+        if request.notification_type == "6_hours_left":
+            success = await telegram_service.send_special_offer_6_hours_left(telegram_id)
+        elif request.notification_type == "1_hour_left":
+            success = await telegram_service.send_special_offer_1_hour_left(telegram_id)
+        elif request.notification_type == "10_minutes_left":
+            success = await telegram_service.send_special_offer_10_minutes_left(telegram_id)
+        else:
+            logger.error(f"❌ Неизвестный тип уведомления: {request.notification_type}")
+            return {"status": "error", "message": f"Неизвестный тип уведомления: {request.notification_type}"}
+        
+        if success:
+            logger.info(f"✅ Уведомление '{request.notification_type}' успешно отправлено пользователю {telegram_id}")
+            return {"status": "success", "message": f"Уведомление '{request.notification_type}' отправлено"}
+        else:
+            logger.error(f"❌ Не удалось отправить уведомление '{request.notification_type}' пользователю {telegram_id}")
+            return {"status": "error", "message": f"Не удалось отправить уведомление '{request.notification_type}'"}
+            
+    except Exception as e:
+        logger.error(f"Error sending special offer notification: {e}")
+        return {"status": "error", "message": f"Ошибка при отправке уведомления: {str(e)}"}
+
+@app.post("/api/user/{telegram_id}/send-all-special-offer-notifications", summary="Отправить все уведомления о спецпредложении")
+async def send_all_special_offer_notifications(telegram_id: int):
+    """Отправить все уведомления о спецпредложении (для тестирования)"""
+    try:
+        logger.info(f"📱 Отправка всех уведомлений о спецпредложении для пользователя {telegram_id}")
+        
+        # Импортируем telegram_service
+        from bot.services.telegram_service import telegram_service
+        
+        results = {}
+        
+        # Отправляем все типы уведомлений
+        notification_types = [
+            ("6_hours_left", "6 часов до конца"),
+            ("1_hour_left", "1 час до конца"),
+            ("10_minutes_left", "10 минут до конца")
+        ]
+        
+        for notification_type, description in notification_types:
+            try:
+                if notification_type == "6_hours_left":
+                    success = await telegram_service.send_special_offer_6_hours_left(telegram_id)
+                elif notification_type == "1_hour_left":
+                    success = await telegram_service.send_special_offer_1_hour_left(telegram_id)
+                elif notification_type == "10_minutes_left":
+                    success = await telegram_service.send_special_offer_10_minutes_left(telegram_id)
+                
+                results[notification_type] = {
+                    "success": success,
+                    "description": description
+                }
+                
+                # Небольшая задержка между отправками
+                import asyncio
+                await asyncio.sleep(1)
+                
+            except Exception as e:
+                logger.error(f"❌ Ошибка при отправке уведомления '{notification_type}': {e}")
+                results[notification_type] = {
+                    "success": False,
+                    "description": description,
+                    "error": str(e)
+                }
+        
+        # Подсчитываем успешные отправки
+        successful_sends = sum(1 for result in results.values() if result.get("success"))
+        total_sends = len(results)
+        
+        logger.info(f"📊 Результаты отправки: {successful_sends}/{total_sends} успешно")
+        
+        return {
+            "status": "success",
+            "message": f"Отправлено {successful_sends}/{total_sends} уведомлений",
+            "results": results,
+            "summary": {
+                "total": total_sends,
+                "successful": successful_sends,
+                "failed": total_sends - successful_sends
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error sending all special offer notifications: {e}")
+        return {"status": "error", "message": f"Ошибка при отправке уведомлений: {str(e)}"}
+
 # Подключение статических файлов в конце (после всех API маршрутов)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
