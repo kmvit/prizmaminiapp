@@ -66,6 +66,11 @@ class User(Base):
     # Таймер спецпредложения
     special_offer_started_at = Column(DateTime, nullable=True)
     
+    # Флаги отправленных уведомлений о таймере
+    notification_6_hours_sent = Column(Boolean, default=False)
+    notification_1_hour_sent = Column(Boolean, default=False)
+    notification_10_minutes_sent = Column(Boolean, default=False)
+    
     # Связи
     answers = relationship("Answer", back_populates="user")
     payments = relationship("Payment", back_populates="user")

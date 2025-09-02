@@ -1,11 +1,22 @@
 from logging.config import fileConfig
+import os
+import sys
+from pathlib import Path
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
 
+# Добавляем путь к проекту в sys.path
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+
 from bot.database.models import Base
+from bot.config import DATABASE_URL
+
+# Заменяем асинхронный URL на синхронный для Alembic
+SYNC_DATABASE_URL = DATABASE_URL.replace('+aiosqlite://', '://')
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -59,8 +70,12 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # Используем URL из конфигурации приложения
+    configuration = config.get_section(config.config_ini_section, {})
+    configuration['sqlalchemy.url'] = SYNC_DATABASE_URL
+    
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

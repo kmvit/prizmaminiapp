@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 import os
+import asyncio
 from typing import Optional
 from datetime import datetime
 import decimal
@@ -614,6 +615,13 @@ async def generate_report_background(telegram_id: int):
             logger.info(f"✅ Фоновая генерация отчета завершена успешно для пользователя {telegram_id}: {report_path}")
             
             # НЕ удаляем данные пользователя - оставляем их для возможного повторного прохождения
+            
+            # Запускаем таймер спецпредложения (если еще не запущен)
+            if not user.special_offer_started_at:
+                logger.info(f"🚀 Запуск таймера спецпредложения для пользователя {telegram_id}")
+                user.special_offer_started_at = datetime.utcnow()
+                await db_service.update_user(telegram_id, {"special_offer_started_at": user.special_offer_started_at})
+                logger.info(f"✅ Таймер спецпредложения запущен: {user.special_offer_started_at}")
             
             # Отправляем уведомление в Telegram
             from bot.services.telegram_service import telegram_service
@@ -1577,11 +1585,19 @@ async def get_special_offer_timer(telegram_id: int):
         # Получаем пользователя
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
-        # Если таймер еще не запущен, запускаем его
+        # Проверяем, есть ли активный таймер
         if not user.special_offer_started_at:
-            logger.info(f"🚀 Запуск таймера спецпредложения для пользователя {telegram_id}")
-            user.special_offer_started_at = datetime.utcnow()
-            await db_service.update_user(telegram_id, {"special_offer_started_at": user.special_offer_started_at})
+            logger.info(f"⏰ Таймер спецпредложения для пользователя {telegram_id} не найден")
+            return {
+                "status": "no_timer",
+                "message": "Таймер спецпредложения не запущен",
+                "timer": None,
+                "pricing": {
+                    "current_price": 6980,
+                    "original_price": 6980,
+                    "is_offer_active": False
+                }
+            }
         
         # Вычисляем оставшееся время (24 часа = 86400 секунд)
         offer_duration = 86400  # 24 часа в секундах
@@ -1606,6 +1622,8 @@ async def get_special_offer_timer(telegram_id: int):
             current_price = 6980
             original_price = 6980
             is_offer_active = False
+        
+
         
         return {
             "status": "success",
@@ -1750,6 +1768,100 @@ async def send_all_special_offer_notifications(telegram_id: int):
     except Exception as e:
         logger.error(f"Error sending all special offer notifications: {e}")
         return {"status": "error", "message": f"Ошибка при отправке уведомлений: {str(e)}"}
+
+async def check_and_send_timer_notifications(telegram_id: int, remaining_seconds: int):
+    """Проверить и отправить уведомления по таймеру спецпредложения"""
+    try:
+        # Импортируем telegram_service
+        from bot.services.telegram_service import telegram_service
+        
+        # Получаем пользователя для проверки уже отправленных уведомлений
+        user = await db_service.get_or_create_user(telegram_id=telegram_id)
+        
+        # Вычисляем часы и минуты
+        hours = int(remaining_seconds // 3600)
+        minutes = int((remaining_seconds % 3600) // 60)
+        
+        # Проверяем и отправляем уведомления в нужное время
+        # За 6 часов до конца (6:00:00 - 6:59:59)
+        if 6 <= hours < 7 and not user.notification_6_hours_sent:
+            logger.info(f"⏰ Отправляем уведомление за 6 часов до конца акции пользователю {telegram_id}")
+            success = await telegram_service.send_special_offer_6_hours_left(telegram_id)
+            if success:
+                # Отмечаем что уведомление отправлено
+                await db_service.update_user(telegram_id, {"notification_6_hours_sent": True})
+                logger.info(f"✅ Уведомление за 6 часов отправлено и отмечено в БД для пользователя {telegram_id}")
+        
+        # За 1 час до конца (1:00:00 - 1:59:59)
+        elif hours == 1 and minutes == 0 and not user.notification_1_hour_sent:
+            logger.info(f"⏰ Отправляем уведомление за 1 час до конца акции пользователю {telegram_id}")
+            success = await telegram_service.send_special_offer_1_hour_left(telegram_id)
+            if success:
+                # Отмечаем что уведомление отправлено
+                await db_service.update_user(telegram_id, {"notification_1_hour_sent": True})
+                logger.info(f"✅ Уведомление за 1 час отправлено и отмечено в БД для пользователя {telegram_id}")
+        
+        # За 10 минут до конца (0:10:00 - 0:10:59)
+        elif hours == 0 and minutes == 10 and not user.notification_10_minutes_sent:
+            logger.info(f"⏰ Отправляем уведомление за 10 минут до конца акции пользователю {telegram_id}")
+            success = await telegram_service.send_special_offer_10_minutes_left(telegram_id)
+            if success:
+                # Отмечаем что уведомление отправлено
+                await db_service.update_user(telegram_id, {"notification_10_minutes_sent": True})
+                logger.info(f"✅ Уведомление за 10 минут отправлено и отмечено в БД для пользователя {telegram_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка при проверке и отправке уведомлений по таймеру для пользователя {telegram_id}: {e}")
+
+async def background_timer_checker():
+    """Фоновая задача для проверки таймеров и отправки уведомлений"""
+    while True:
+        try:
+            logger.info("🔄 Запуск фоновой проверки таймеров спецпредложений...")
+            
+            # Получаем всех пользователей с активными таймерами
+            from bot.database.database import async_session
+            from bot.database.models import User
+            from sqlalchemy import select
+            
+            async with async_session() as session:
+                # Ищем пользователей с активными таймерами
+                stmt = select(User).where(
+                    User.special_offer_started_at.isnot(None)
+                )
+                result = await session.execute(stmt)
+                users = result.scalars().all()
+                
+                logger.info(f"📊 Найдено {len(users)} пользователей с активными таймерами")
+                
+                for user in users:
+                    try:
+                        # Вычисляем оставшееся время
+                        offer_duration = 86400  # 24 часа в секундах
+                        elapsed_time = (datetime.utcnow() - user.special_offer_started_at).total_seconds()
+                        remaining_time = max(0, offer_duration - elapsed_time)
+                        
+                        # Проверяем и отправляем уведомления
+                        await check_and_send_timer_notifications(user.telegram_id, remaining_time)
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка при обработке пользователя {user.telegram_id}: {e}")
+                        continue
+                
+                logger.info("✅ Фоновая проверка таймеров завершена")
+                
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка в фоновой задаче: {e}")
+        
+        # Ждем 5 минут перед следующей проверкой
+        await asyncio.sleep(300)  # 5 минут = 300 секунд
+
+# Запуск фоновой задачи при старте приложения
+@app.on_event("startup")
+async def startup_event():
+    """Запуск фоновых задач при старте приложения"""
+    logger.info("🚀 Запуск фоновой задачи проверки таймеров...")
+    asyncio.create_task(background_timer_checker())
 
 # Подключение статических файлов в конце (после всех API маршрутов)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
