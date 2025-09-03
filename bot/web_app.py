@@ -1782,6 +1782,9 @@ async def check_and_send_timer_notifications(telegram_id: int, remaining_seconds
         hours = int(remaining_seconds // 3600)
         minutes = int((remaining_seconds % 3600) // 60)
         
+        # Логируем текущее время для отладки
+        logger.info(f"⏱️ Пользователь {telegram_id}: осталось {hours:02d}:{minutes:02d}:00, флаги: 6ч={user.notification_6_hours_sent}, 1ч={user.notification_1_hour_sent}, 10м={user.notification_10_minutes_sent}")
+        
         # Проверяем и отправляем уведомления в нужное время
         # За 6 часов до конца (6:00:00 - 6:59:59)
         if 6 <= hours < 7 and not user.notification_6_hours_sent:
@@ -1793,7 +1796,7 @@ async def check_and_send_timer_notifications(telegram_id: int, remaining_seconds
                 logger.info(f"✅ Уведомление за 6 часов отправлено и отмечено в БД для пользователя {telegram_id}")
         
         # За 1 час до конца (1:00:00 - 1:59:59)
-        elif hours == 1 and minutes == 0 and not user.notification_1_hour_sent:
+        elif 1 <= hours < 2 and not user.notification_1_hour_sent:
             logger.info(f"⏰ Отправляем уведомление за 1 час до конца акции пользователю {telegram_id}")
             success = await telegram_service.send_special_offer_1_hour_left(telegram_id)
             if success:
@@ -1801,8 +1804,8 @@ async def check_and_send_timer_notifications(telegram_id: int, remaining_seconds
                 await db_service.update_user(telegram_id, {"notification_1_hour_sent": True})
                 logger.info(f"✅ Уведомление за 1 час отправлено и отмечено в БД для пользователя {telegram_id}")
         
-        # За 10 минут до конца (0:10:00 - 0:10:59)
-        elif hours == 0 and minutes == 10 and not user.notification_10_minutes_sent:
+        # За 10 минут до конца (0:10:00 - 0:19:59)
+        elif hours == 0 and 10 <= minutes < 20 and not user.notification_10_minutes_sent:
             logger.info(f"⏰ Отправляем уведомление за 10 минут до конца акции пользователю {telegram_id}")
             success = await telegram_service.send_special_offer_10_minutes_left(telegram_id)
             if success:
@@ -1840,6 +1843,11 @@ async def background_timer_checker():
                         offer_duration = 86400  # 24 часа в секундах
                         elapsed_time = (datetime.utcnow() - user.special_offer_started_at).total_seconds()
                         remaining_time = max(0, offer_duration - elapsed_time)
+                        
+                        # Логируем время для отладки
+                        remaining_hours = int(remaining_time // 3600)
+                        remaining_minutes = int((remaining_time % 3600) // 60)
+                        logger.info(f"⏰ Пользователь {user.telegram_id}: таймер запущен в {user.special_offer_started_at}, осталось {remaining_hours:02d}:{remaining_minutes:02d}:00")
                         
                         # Проверяем и отправляем уведомления
                         await check_and_send_timer_notifications(user.telegram_id, remaining_time)
