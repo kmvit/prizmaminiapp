@@ -110,10 +110,22 @@ window.QuestionPage = {
             console.log('📥 Получены данные вопроса:', questionData);
             
             if (questionData) {
-                this.displayQuestion(questionData);
+                if (questionData.question) {
+                    this.displayQuestion(questionData);
+                } else {
+                    console.log('❌ В ответе нет поля question — проверяем оплату и перенаправляем при необходимости');
+                    const redirected = await this.redirectToOfferIfUnpaid(telegramId);
+                    if (!redirected) {
+                        // Если оплата завершена или профиль недоступен — переходим к загрузке/завершению
+                        window.location.href = 'loading.html';
+                    }
+                }
             } else {
-                console.log('❌ Нет доступных вопросов');
-                window.location.href = 'loading.html';
+                console.log('❌ Нет доступных вопросов — проверяем оплату и перенаправляем при необходимости');
+                const redirected = await this.redirectToOfferIfUnpaid(telegramId);
+                if (!redirected) {
+                    window.location.href = 'loading.html';
+                }
             }
         } catch (error) {
             console.error('❌ Ошибка при загрузке вопроса:', error);
@@ -133,6 +145,13 @@ window.QuestionPage = {
                 return;
             }
             
+            // При ошибке пробуем перенаправить на оффер, если премиум не оплачен
+            try {
+                const telegramId = this.getTelegramUserId();
+                const redirected = await this.redirectToOfferIfUnpaid(telegramId);
+                if (redirected) return;
+            } catch (_) {}
+
             // Показываем пользователю сообщение об ошибке
             $('#questionText').text('Ошибка загрузки вопроса. Попробуйте обновить страницу.');
             $('.current-question').text('?');
@@ -314,6 +333,27 @@ window.QuestionPage = {
         if (window.TelegramWebApp) {
             window.TelegramWebApp.hapticFeedback('light');
         }
+    },
+
+    /**
+     * Проверить статус оплаты и при отсутствии оплаты перекинуть на экран оффера
+     * @param {number} telegramId
+     * @returns {Promise<boolean>} true если был выполнен редирект
+     */
+    async redirectToOfferIfUnpaid(telegramId) {
+        try {
+            const profile = await ApiClient.getUserProfile(telegramId);
+            const paymentStatus = profile && (profile.payment_status || profile?.user?.payment_status);
+            console.log('💳 Статус оплаты:', paymentStatus);
+            if (paymentStatus !== 'completed') {
+                console.log('➡️ Переадресуем на экран спецпредложения (price-offer)');
+                window.location.href = 'price-offer.html';
+                return true;
+            }
+        } catch (e) {
+            console.warn('⚠️ Не удалось получить профиль для проверки оплаты:', e);
+        }
+        return false;
     },
 
     /**
