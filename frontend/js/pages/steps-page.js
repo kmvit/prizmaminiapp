@@ -21,9 +21,6 @@ window.StepsPage = {
      */
     setupTelegramUI() {
         if (window.TelegramWebApp) {
-            window.TelegramWebApp.showBackButton(() => {
-                window.location.href = 'index.html';
-            });
             window.TelegramWebApp.showMainButton('Продолжить', () => {
                 window.location.href = 'price.html';
             });

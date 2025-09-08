@@ -198,49 +198,6 @@
             },
 
             /**
-             * Принудительно задать видимость BackButton во всех средах (Web/Desktop/Mobile)
-             * Использует postMessage (Web), TelegramWebviewProxy (Desktop/Mobile) и fallback через API
-             * @param {boolean} isVisible
-             */
-            forceBackButtonVisibility: function(isVisible) {
-                // 1) Fallback через официальный API-объект, если доступен
-                try {
-                    if (this.tg && this.tg.BackButton) {
-                        if (isVisible) {
-                            this.tg.BackButton.show();
-                        } else {
-                            this.tg.BackButton.hide();
-                        }
-                    }
-                } catch (e) {
-                    console.log('⬅️ Fallback BackButton API недоступен:', e);
-                }
-
-                // 2) Desktop/Mobile: TelegramWebviewProxy.postEvent('web_app_setup_back_button', data)
-                try {
-                    if (window.TelegramWebviewProxy && typeof window.TelegramWebviewProxy.postEvent === 'function') {
-                        const data = JSON.stringify({ is_visible: !!isVisible });
-                        window.TelegramWebviewProxy.postEvent('web_app_setup_back_button', data);
-                    }
-                } catch (e) {
-                    console.log('⬅️ TelegramWebviewProxy недоступен:', e);
-                }
-
-                // 3) Web: postMessage в родительский iframe (web.telegram.org)
-                try {
-                    const message = JSON.stringify({
-                        eventType: 'web_app_setup_back_button',
-                        eventData: { is_visible: !!isVisible }
-                    });
-                    if (window.parent && window.parent !== window) {
-                        window.parent.postMessage(message, 'https://web.telegram.org');
-                    }
-                } catch (e) {
-                    console.log('⬅️ postMessage для web_app_setup_back_button не выполнен:', e);
-                }
-            },
-
-            /**
              * Отправить данные в Telegram
              * @param {Object} data - Данные для отправки
              */
