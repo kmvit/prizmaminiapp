@@ -25,14 +25,14 @@ window.PricePage = {
     /**
      * Настройка Telegram UI для страницы цен
      */
-    setupTelegramUI() {
-        if (window.TelegramWebApp) {
-            window.TelegramWebApp.showBackButton(() => {
-                window.location.href = 'steps.html';
-            });
-            window.TelegramWebApp.hideMainButton();
-        }
-    },
+    // setupTelegramUI() {
+    //     if (window.TelegramWebApp) {
+    //         window.TelegramWebApp.showBackButton(() => {
+    //             window.location.href = 'steps.html';
+    //         });
+    //         window.TelegramWebApp.hideMainButton();
+    //     }
+    // },
 
     /**
      * Настройка обработчиков событий

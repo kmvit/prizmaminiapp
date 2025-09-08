@@ -21,21 +21,21 @@ window.PriceOfferPage = {
     /**
      * Настройка Telegram UI для страницы спецпредложения
      */
-    setupTelegramUI() {
-        if (window.TelegramWebApp) {
-            // Явно скрываем кнопку "Назад"
-            try { window.TelegramWebApp.hideBackButton(); } catch (_) {}
+    // setupTelegramUI() {
+    //     if (window.TelegramWebApp) {
+    //         // Явно скрываем кнопку "Назад"
+    //         try { window.TelegramWebApp.hideBackButton(); } catch (_) {}
 
-            // Показываем главную кнопку "Закрыть" для выхода из WebApp
-            try {
-                window.TelegramWebApp.showMainButton('Закрыть', () => {
-                    try { window.TelegramWebApp.close(); } catch (e) { try { window.close(); } catch (e2) {} }
-                });
-            } catch (_) {
-                // Если MainButton недоступна, fallback не требуется — страница имеет собственные кнопки
-            }
-        }
-    },
+    //         // Показываем главную кнопку "Закрыть" для выхода из WebApp
+    //         try {
+    //             window.TelegramWebApp.showMainButton('Закрыть', () => {
+    //                 try { window.TelegramWebApp.close(); } catch (e) { try { window.close(); } catch (e2) {} }
+    //             });
+    //         } catch (_) {
+    //             // Если MainButton недоступна, fallback не требуется — страница имеет собственные кнопки
+    //         }
+    //     }
+    // },
 
     /**
      * Проверка статуса платежа при загрузке

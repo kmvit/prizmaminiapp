@@ -33,14 +33,14 @@ window.QuestionPage = {
     /**
      * Настройка Telegram UI для страницы вопросов
      */
-    setupTelegramUI() {
-        if (window.TelegramWebApp) {
-            window.TelegramWebApp.showBackButton(() => {
-                window.location.href = 'login.html';
-            });
-            window.TelegramWebApp.hideMainButton();
-        }
-    },
+    // setupTelegramUI() {
+    //     if (window.TelegramWebApp) {
+    //         window.TelegramWebApp.showBackButton(() => {
+    //             window.location.href = 'login.html';
+    //         });
+    //         window.TelegramWebApp.hideMainButton();
+    //     }
+    // },
 
     /**
      * Настройка UI элементов
