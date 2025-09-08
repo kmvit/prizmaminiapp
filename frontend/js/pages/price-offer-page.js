@@ -23,10 +23,12 @@ window.PriceOfferPage = {
      */
     setupTelegramUI() {
         if (window.TelegramWebApp) {
-            window.TelegramWebApp.showBackButton(() => {
-                window.location.href = 'steps.html';
-            });
-            window.TelegramWebApp.hideMainButton();
+            try { window.TelegramWebApp.forceBackButtonVisibility(false); } catch (_) {}
+            try {
+                window.TelegramWebApp.showMainButton('Закрыть', () => {
+                    try { window.TelegramWebApp.close(); } catch (e) { try { window.close(); } catch (e2) {} }
+                });
+            } catch (_) {}
         }
     },
 
