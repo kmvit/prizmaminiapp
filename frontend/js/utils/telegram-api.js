@@ -172,20 +172,16 @@
              * @param {Function} callback - Обработчик клика
              */
             showBackButton: function(callback) {
-                if (!this.tg || !this.tg.BackButton) return;
-                
+                // Глобально отключаем показ Telegram BackButton во всём веб-приложении
+                // Намеренно ничего не делаем, чтобы даже прямые вызовы со страниц
+                // не отображали кнопку назад.
                 try {
-                    this.tg.BackButton.show();
-                    
-                    if (callback) {
-                        this.tg.BackButton.onClick(callback);
-                    } else {
-                        this.tg.BackButton.onClick(function() {
-                            window.history.back();
-                        });
+                    if (this.tg && this.tg.BackButton) {
+                        this.tg.BackButton.hide();
+                        // Не регистрируем обработчики клика, чтобы исключить побочные эффекты
                     }
                 } catch (error) {
-                    console.log('⬅️ BackButton не поддерживается:', error);
+                    console.log('⬅️ BackButton не поддерживается или скрыт:', error);
                 }
             },
 
