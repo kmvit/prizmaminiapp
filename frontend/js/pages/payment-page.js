@@ -19,14 +19,14 @@ window.PaymentPage = {
     /**
      * Настройка Telegram UI для страницы платежа
      */
-    // setupTelegramUI() {
-    //     if (window.TelegramWebApp) {
-    //         window.TelegramWebApp.showBackButton(() => {
-    //             window.location.href = 'price.html';
-    //         });
-    //         window.TelegramWebApp.hideMainButton();
-    //     }
-    // },
+    setupTelegramUI() {
+        if (window.TelegramWebApp) {
+            window.TelegramWebApp.showBackButton(() => {
+                window.location.href = 'price.html';
+            });
+            window.TelegramWebApp.hideMainButton();
+        }
+    },
 
     /**
      * Запуск мониторинга статуса платежа
