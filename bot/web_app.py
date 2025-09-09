@@ -150,6 +150,9 @@ async def get_current_question(telegram_id: int):
             )
         )
         
+    except HTTPException as e:
+        # Пробрасываем HTTP ошибки (например 400: Test already completed)
+        raise e
     except Exception as e:
         logger.error(f"Error getting current question: {e}")
         raise HTTPException(status_code=500, detail="Failed to get question")
