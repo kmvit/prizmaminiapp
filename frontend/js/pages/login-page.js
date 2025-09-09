@@ -24,10 +24,18 @@ window.LoginPage = {
      */
     setupTelegramUI() {
         if (window.TelegramWebApp) {
-            window.TelegramWebApp.showBackButton(() => {
-                window.location.href = 'price.html';
-            });
-            window.TelegramWebApp.hideMainButton();
+            try {
+                if (window.TelegramWebApp.showBackButton) {
+                    window.TelegramWebApp.showBackButton(() => {
+                        window.location.href = 'price.html';
+                    });
+                }
+                if (window.TelegramWebApp.hideMainButton) {
+                    window.TelegramWebApp.hideMainButton();
+                }
+            } catch (error) {
+                console.log('⚠️ Ошибка настройки кнопок Telegram:', error);
+            }
         }
     },
 

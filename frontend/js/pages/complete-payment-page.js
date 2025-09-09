@@ -5,7 +5,7 @@
 
 'use strict';
 
-window.complete-paymentPage = {
+window.CompletePaymentPage = {
     /**
      * Инициализация страницы успешного платежа
      */
@@ -21,10 +21,18 @@ window.complete-paymentPage = {
      */
     setupTelegramUI() {
         if (window.TelegramWebApp) {
-            window.TelegramWebApp.hideBackButton();
-            window.TelegramWebApp.showMainButton('Продолжить', () => {
-                window.location.href = 'question.html';
-            });
+            try {
+                if (window.TelegramWebApp.hideBackButton) {
+                    window.TelegramWebApp.hideBackButton();
+                }
+                if (window.TelegramWebApp.showMainButton) {
+                    window.TelegramWebApp.showMainButton('Продолжить', () => {
+                        window.location.href = 'question.html';
+                    });
+                }
+            } catch (error) {
+                console.log('⚠️ Ошибка настройки кнопок Telegram:', error);
+            }
         }
     },
 

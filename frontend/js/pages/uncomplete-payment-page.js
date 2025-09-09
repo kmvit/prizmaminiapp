@@ -20,10 +20,18 @@ window.uncomplete-paymentPage = {
      */
     setupTelegramUI() {
         if (window.TelegramWebApp) {
-            window.TelegramWebApp.hideBackButton();
-            window.TelegramWebApp.showMainButton('Попробовать снова', () => {
-                window.location.href = 'price.html';
-            });
+            try {
+                if (window.TelegramWebApp.hideBackButton) {
+                    window.TelegramWebApp.hideBackButton();
+                }
+                if (window.TelegramWebApp.showMainButton) {
+                    window.TelegramWebApp.showMainButton('Попробовать снова', () => {
+                        window.location.href = 'price.html';
+                    });
+                }
+            } catch (error) {
+                console.log('⚠️ Ошибка настройки кнопок Telegram:', error);
+            }
         }
     }
 }; 

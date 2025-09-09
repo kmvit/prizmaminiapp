@@ -20,8 +20,16 @@ window.AnswersPage = {
      */
     setupTelegramUI() {
         if (window.TelegramWebApp) {
-            window.TelegramWebApp.hideBackButton();
-            window.TelegramWebApp.hideMainButton();
+            try {
+                if (window.TelegramWebApp.hideBackButton) {
+                    window.TelegramWebApp.hideBackButton();
+                }
+                if (window.TelegramWebApp.hideMainButton) {
+                    window.TelegramWebApp.hideMainButton();
+                }
+            } catch (error) {
+                console.log('⚠️ Ошибка скрытия кнопок Telegram:', error);
+            }
         }
     }
 }; 
