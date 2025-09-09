@@ -19,6 +19,11 @@ window.PricePage = {
             this.setupEventHandlers();
             // Обновляем текст кнопки в зависимости от статуса пользователя
             this.updateButtonText();
+        }).catch(error => {
+            console.error('❌ Ошибка при инициализации страницы цен:', error);
+            // В случае ошибки все равно настраиваем обработчики
+            this.setupTelegramUI();
+            this.setupEventHandlers();
         });
     },
 
@@ -28,8 +33,16 @@ window.PricePage = {
     setupTelegramUI() {
         if (window.TelegramWebApp) {
             // Скрываем кнопки навигации Telegram для страницы цен
-            window.TelegramWebApp.hideBackButton();
-            window.TelegramWebApp.hideMainButton();
+            try {
+                if (window.TelegramWebApp.hideBackButton) {
+                    window.TelegramWebApp.hideBackButton();
+                }
+                if (window.TelegramWebApp.hideMainButton) {
+                    window.TelegramWebApp.hideMainButton();
+                }
+            } catch (error) {
+                console.log('⚠️ Ошибка скрытия кнопок Telegram:', error);
+            }
         }
     },
 
