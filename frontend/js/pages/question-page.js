@@ -33,14 +33,22 @@ window.QuestionPage = {
     /**
      * Настройка Telegram UI для страницы вопросов
      */
-    // setupTelegramUI() {
-    //     if (window.TelegramWebApp) {
-    //         window.TelegramWebApp.showBackButton(() => {
-    //             window.location.href = 'login.html';
-    //         });
-    //         window.TelegramWebApp.hideMainButton();
-    //     }
-    // },
+    setupTelegramUI() {
+        if (window.TelegramWebApp) {
+            try {
+                if (window.TelegramWebApp.showBackButton) {
+                    window.TelegramWebApp.showBackButton(() => {
+                        window.location.href = 'login.html';
+                    });
+                }
+                if (window.TelegramWebApp.hideMainButton) {
+                    window.TelegramWebApp.hideMainButton();
+                }
+            } catch (error) {
+                console.log('⚠️ Ошибка настройки кнопок Telegram:', error);
+            }
+        }
+    },
 
     /**
      * Настройка UI элементов
