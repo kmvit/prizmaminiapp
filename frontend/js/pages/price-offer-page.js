@@ -54,6 +54,14 @@ window.PriceOfferPage = {
                 return;
             }
             
+            // Если пользователь вернулся после неуспешной оплаты, сохраняем состояние акции
+            if (status.payment_status === 'failed' || !status.payment_status) {
+                console.log('🔄 Пользователь вернулся после неуспешной оплаты, восстанавливаем акцию');
+                // Сохраняем информацию о том, что пользователь был на акции
+                localStorage.setItem('was_on_special_offer', 'true');
+                localStorage.setItem('special_offer_timestamp', Date.now().toString());
+            }
+            
             console.log('🆕 Нет активного платежа, остаемся на странице спецпредложения');
             
         } catch (error) {
@@ -212,6 +220,21 @@ window.PriceOfferPage = {
                 return;
             }
 
+            // Проверяем, был ли пользователь на акции ранее (после неуспешной оплаты)
+            const wasOnSpecialOffer = localStorage.getItem('was_on_special_offer') === 'true';
+            const specialOfferTimestamp = localStorage.getItem('special_offer_timestamp');
+            
+            if (wasOnSpecialOffer && specialOfferTimestamp) {
+                const timeSinceReturn = Date.now() - parseInt(specialOfferTimestamp);
+                // Если прошло меньше 5 минут с момента возврата, восстанавливаем акцию
+                if (timeSinceReturn < 5 * 60 * 1000) {
+                    console.log('🔄 Восстанавливаем акцию после неуспешной оплаты');
+                    // Очищаем флаги
+                    localStorage.removeItem('was_on_special_offer');
+                    localStorage.removeItem('special_offer_timestamp');
+                }
+            }
+
             // Получаем информацию о таймере с сервера
             const timerData = await ApiClient.getSpecialOfferTimer(telegramId);
             
@@ -221,6 +244,16 @@ window.PriceOfferPage = {
                 this.startCountdown(timerData.timer.remaining_seconds);
             } else {
                 console.error('❌ Ошибка получения таймера:', timerData);
+                // Если таймер не найден, но пользователь был на акции, показываем акцию
+                if (wasOnSpecialOffer) {
+                    console.log('💎 Показываем акцию для пользователя, который был на ней ранее');
+                    this.updateTimerDisplay({ time_string: '23:59:59', is_expired: false });
+                    this.updatePricingDisplay({
+                        current_price: 3590,
+                        original_price: 6980,
+                        is_offer_active: true
+                    });
+                }
             }
             
         } catch (error) {

@@ -57,7 +57,8 @@ window.DownloadPage = {
         // Обработчик основной кнопки скачивания
         $('#downloadReport').on('click', () => {
             console.log('📥 Нажата кнопка скачивания отчета');
-            this.downloadReport('free'); // По умолчанию скачиваем бесплатный отчет
+            // Определяем тип отчета на основе статуса пользователя
+            this.downloadReport('premium'); // На странице download.html всегда премиум отчет
         });
     },
 
@@ -77,6 +78,21 @@ window.DownloadPage = {
                 UIHelpers.showLoadingIndicator();
             }
             
+            // Для премиум отчетов используем специальную логику
+            if (reportType === 'premium') {
+                console.log('💎 Скачивание премиум отчета - принудительное скачивание');
+                
+                // Показываем специальное сообщение для премиум отчета
+                if (window.TelegramWebApp) {
+                    window.TelegramWebApp.showAlert(
+                        '💎 Скачивание премиум отчета\n\n' +
+                        '📱 Файл будет автоматически скачан на ваше устройство.\n' +
+                        '📄 Имя файла: prizma-premium-report-' + telegramId + '.pdf\n\n' +
+                        '💡 Если скачивание не началось автоматически, проверьте настройки браузера.'
+                    );
+                }
+            }
+            
             // Скачиваем отчет
             const result = await DownloadUtils.downloadReport(telegramId, reportType, {
                 showInstructions: true
@@ -89,8 +105,12 @@ window.DownloadPage = {
                 UIHelpers.hideLoadingIndicator();
             }
             
-            // Тактильная обратная связь
-            window.TelegramWebApp?.hapticFeedback('success');
+            // Тактильная обратная связь (используем правильные параметры)
+            if (reportType === 'premium') {
+                window.TelegramWebApp?.hapticFeedback('heavy');
+            } else {
+                window.TelegramWebApp?.hapticFeedback('light');
+            }
             
         } catch (error) {
             console.error('❌ Ошибка при скачивании отчета:', error);
@@ -162,6 +182,8 @@ window.DownloadPage = {
             if (status.available_report && status.available_report.status === 'ready') {
                 if (status.available_report.type === 'premium') {
                     console.log('💎 Премиум отчет готов, остаемся на download');
+                    // Обновляем текст кнопки для премиум отчета
+                    this.updateDownloadButtonForPremium();
                     return;
                 } else if (status.available_report.type === 'free') {
                     console.log('🆓 Готов только бесплатный отчет — перенаправляем на price-offer');
@@ -183,6 +205,24 @@ window.DownloadPage = {
             
         } catch (error) {
             console.error('❌ Ошибка при проверке статуса отчетов:', error);
+        }
+    },
+
+    /**
+     * Обновить кнопку скачивания для премиум отчета
+     */
+    updateDownloadButtonForPremium() {
+        try {
+            const downloadButton = document.getElementById('downloadReport');
+            if (downloadButton) {
+                const downloadText = downloadButton.querySelector('.download-file-text span');
+                if (downloadText) {
+                    downloadText.textContent = 'Скачать премиум отчет';
+                }
+                console.log('💎 Кнопка скачивания обновлена для премиум отчета');
+            }
+        } catch (error) {
+            console.error('❌ Ошибка при обновлении кнопки скачивания:', error);
         }
     }
 }; 

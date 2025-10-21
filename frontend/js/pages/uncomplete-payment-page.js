@@ -5,7 +5,7 @@
 
 'use strict';
 
-window.uncomplete-paymentPage = {
+window.UncompletePaymentPage = {
     /**
      * Инициализация страницы неуспешного платежа
      */
@@ -26,7 +26,8 @@ window.uncomplete-paymentPage = {
                 }
                 if (window.TelegramWebApp.showMainButton) {
                     window.TelegramWebApp.showMainButton('Попробовать снова', () => {
-                        window.location.href = 'price.html';
+                        // Возвращаемся на страницу спецпредложения, чтобы сохранить акцию
+                        window.location.href = 'price-offer.html';
                     });
                 }
             } catch (error) {

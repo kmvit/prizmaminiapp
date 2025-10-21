@@ -235,14 +235,21 @@ class ApiClient {
             
             console.log(`📥 Скачивание отчета: ${endpoint}`);
             
+            // Для премиум отчетов всегда используем принудительное скачивание
+            const downloadUrl = reportType === 'premium' 
+                ? `${endpoint}?download=1&source=telegram&t=${Date.now()}`
+                : `${endpoint}?download=1&source=telegram&t=${Date.now()}`;
+            
+            console.log(`📥 URL для скачивания: ${downloadUrl}`);
+            
             // Открываем ссылку напрямую
             if (window.TelegramWebApp) {
-                window.TelegramWebApp.openLink(endpoint);
-                return { success: true, method: 'telegram' };
+                window.TelegramWebApp.openLink(downloadUrl);
+                return { success: true, method: 'telegram', url: downloadUrl };
             } else {
                 // Для браузера открываем в новой вкладке
-                window.open(endpoint, '_blank');
-                return { success: true, method: 'browser' };
+                window.open(downloadUrl, '_blank');
+                return { success: true, method: 'browser', url: downloadUrl };
             }
         } catch (error) {
             console.error('❌ Ошибка скачивания отчета:', error);
@@ -359,6 +366,31 @@ class ApiClient {
             return await response.json();
         } catch (error) {
             console.error(`❌ API Error (${endpoint}):`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Получить таймер спецпредложения
+     * @param {number} userId - ID пользователя
+     * @returns {Promise<Object>} Информация о таймере
+     */
+    static async getSpecialOfferTimer(userId) {
+        try {
+            const response = await fetch(`${this.baseUrl}/user/${userId}/special-offer-timer`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('❌ Ошибка получения таймера спецпредложения:', error);
             throw error;
         }
     }
