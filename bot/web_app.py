@@ -571,6 +571,7 @@ async def download_personal_report(telegram_id: int, download: Optional[str] = N
         if download == "1":
             headers["Content-Disposition"] = f'attachment; filename="prizma-report-{telegram_id}.pdf"'
             headers["Content-Type"] = "application/pdf"
+            headers["X-Content-Type-Options"] = "nosniff"
             headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             headers["Pragma"] = "no-cache"
             headers["Expires"] = "0"
@@ -1210,6 +1211,7 @@ async def download_premium_personal_report(telegram_id: int, download: Optional[
         if download == "1":
             headers["Content-Disposition"] = f'attachment; filename="prizma-premium-report-{telegram_id}.pdf"'
             headers["Content-Type"] = "application/pdf"
+            headers["X-Content-Type-Options"] = "nosniff"
             headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             headers["Pragma"] = "no-cache"
             headers["Expires"] = "0"
