@@ -41,13 +41,24 @@ async def process_update(update_dict: dict) -> bool:
         return False
     
     try:
+        logger.debug(f"🔄 Обработка обновления через aiogram: {update_dict}")
+        
         # Создаем объект Update из словаря
-        update = Update(**update_dict)
+        # В aiogram 3.x нужно использовать model_validate для создания объектов из JSON
+        try:
+            update = Update.model_validate(update_dict)
+        except Exception as parse_error:
+            # Fallback: пытаемся создать через конструктор
+            logger.warning(f"⚠️ Ошибка при парсинге Update через model_validate: {parse_error}")
+            update = Update(**update_dict)
+        
+        logger.debug(f"✅ Update объект создан: {type(update)}")
         
         # Обрабатываем обновление через диспетчер
         # В aiogram 3.x используем feed_update с bot и update
         await dp.feed_update(bot, update)
         
+        logger.debug(f"✅ Обновление обработано диспетчером")
         return True
     except Exception as e:
         logger.error(f"❌ Ошибка при обработке обновления через aiogram: {e}")

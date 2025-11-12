@@ -544,6 +544,33 @@ PRIZMA – ваш личный тренер по развитию, доступ�
             logger.error(f"❌ Ошибка при настройке webhook: {e}")
             return False
 
+    async def get_webhook_info(self) -> dict:
+        """Получить информацию о текущем webhook"""
+        if not self.enabled:
+            return {"error": "Telegram сервис отключен"}
+            
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.base_url}/getWebhookInfo"
+                
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if result.get("ok"):
+                            webhook_info = result.get("result", {})
+                            logger.info(f"📋 Информация о webhook: {webhook_info}")
+                            return webhook_info
+                        else:
+                            logger.error(f"❌ Ошибка получения информации о webhook: {result}")
+                            return {"error": result}
+                    else:
+                        logger.error(f"❌ HTTP ошибка при получении информации о webhook: {response.status}")
+                        return {"error": f"HTTP {response.status}"}
+                        
+        except Exception as e:
+            logger.error(f"❌ Ошибка при получении информации о webhook: {e}")
+            return {"error": str(e)}
+
     async def send_start_message(self, telegram_id: int) -> bool:
         """Отправить приветственное сообщение при команде /start (работает для всех пользователей)"""
         if not self.enabled:

@@ -1875,6 +1875,13 @@ async def startup_event():
     """Запуск фоновых задач при старте приложения"""
     logger.info("🚀 Запуск фоновой задачи проверки таймеров...")
     asyncio.create_task(background_timer_checker())
+    
+    # Инициализируем aiogram бота при старте
+    from bot.bot_setup import bot, dp
+    if bot and dp:
+        logger.info("✅ Aiogram бот готов к работе")
+    else:
+        logger.warning("⚠️ Aiogram бот не инициализирован (проверьте BOT_TOKEN)")
 
 
 @app.on_event("shutdown")
@@ -1904,11 +1911,43 @@ async def setup_telegram_webhook():
         success = await telegram_service.set_webhook(webhook_url)
         
         if success:
-            return {"status": "success", "message": f"Webhook успешно настроен: {webhook_url}"}
+            # Получаем информацию о webhook для подтверждения
+            webhook_info = await telegram_service.get_webhook_info()
+            return {
+                "status": "success", 
+                "message": f"Webhook успешно настроен: {webhook_url}",
+                "webhook_info": webhook_info
+            }
         else:
             return {"status": "error", "message": "Не удалось настроить webhook"}
     except Exception as e:
         logger.error(f"❌ Ошибка при настройке webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/telegram/webhook-info", summary="Получить информацию о текущем webhook")
+async def get_webhook_info():
+    """Получить информацию о текущем webhook"""
+    try:
+        from bot.services.telegram_service import telegram_service
+        
+        if not telegram_service.enabled:
+            return {"status": "error", "message": "Telegram сервис отключен (BOT_TOKEN не настроен)"}
+        
+        webhook_info = await telegram_service.get_webhook_info()
+        
+        # Проверяем статус aiogram бота
+        from bot.bot_setup import bot, dp
+        bot_status = "initialized" if (bot and dp) else "not_initialized"
+        
+        return {
+            "status": "success",
+            "webhook_info": webhook_info,
+            "bot_status": bot_status,
+            "webhook_url_expected": f"{settings.WEBAPP_URL}/api/telegram/webhook" if settings else None
+        }
+    except Exception as e:
+        logger.error(f"❌ Ошибка при получении информации о webhook: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.post("/api/telegram/webhook", summary="Webhook для обработки обновлений от Telegram")
@@ -1917,13 +1956,25 @@ async def telegram_webhook(request: Request):
     try:
         # Получаем данные обновления от Telegram
         update = await request.json()
-        logger.info(f"📨 Получено обновление от Telegram: {update}")
+        logger.info(f"📨 Получено обновление от Telegram")
+        
+        # Логируем тип обновления для отладки
+        if "message" in update:
+            message = update["message"]
+            chat_id = message.get("chat", {}).get("id", "unknown")
+            text = message.get("text", "no text")
+            logger.info(f"💬 Сообщение от {chat_id}: {text[:50]}")
+        elif "callback_query" in update:
+            logger.info(f"🔘 Callback query получен")
+        else:
+            logger.info(f"📋 Другой тип обновления: {list(update.keys())}")
         
         # Обрабатываем обновление через aiogram dispatcher
         from bot.bot_setup import process_update
         success = await process_update(update)
         
         if success:
+            logger.info(f"✅ Обновление успешно обработано")
             return {"ok": True}
         else:
             logger.warning("⚠️ Не удалось обработать обновление через aiogram")
