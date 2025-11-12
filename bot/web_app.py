@@ -1880,6 +1880,20 @@ async def startup_event():
     from bot.bot_setup import bot, dp
     if bot and dp:
         logger.info("✅ Aiogram бот готов к работе")
+        
+        # Проверяем статус webhook
+        try:
+            from bot.services.telegram_service import telegram_service
+            if telegram_service.enabled:
+                webhook_info = await telegram_service.get_webhook_info()
+                webhook_url = webhook_info.get("url", "")
+                if webhook_url:
+                    logger.info(f"📡 Webhook настроен: {webhook_url}")
+                else:
+                    logger.warning("⚠️ Webhook не настроен! Обновления не будут приходить.")
+                    logger.warning("⚠️ Настройте webhook через: POST /api/telegram/setup-webhook")
+        except Exception as e:
+            logger.warning(f"⚠️ Не удалось проверить статус webhook: {e}")
     else:
         logger.warning("⚠️ Aiogram бот не инициализирован (проверьте BOT_TOKEN)")
 
@@ -1954,9 +1968,11 @@ async def get_webhook_info():
 async def telegram_webhook(request: Request):
     """Обработка webhook'ов от Telegram Bot API через aiogram"""
     try:
+        logger.info(f"📥 Получен запрос на webhook endpoint")
+        
         # Получаем данные обновления от Telegram
         update = await request.json()
-        logger.info(f"📨 Получено обновление от Telegram")
+        logger.info(f"📨 Получено обновление от Telegram: {list(update.keys())}")
         
         # Логируем тип обновления для отладки
         if "message" in update:
@@ -1971,6 +1987,7 @@ async def telegram_webhook(request: Request):
         
         # Обрабатываем обновление через aiogram dispatcher
         from bot.bot_setup import process_update
+        logger.info(f"🔄 Передаем обновление в aiogram dispatcher...")
         success = await process_update(update)
         
         if success:
