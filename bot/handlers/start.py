@@ -3,10 +3,10 @@
 """
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import Message
-from bot.services.telegram_service import telegram_service
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from bot.services.database_service import db_service
 from bot.utils.logger import get_logger
+import os
 
 logger = get_logger(__name__)
 router = Router()
@@ -18,31 +18,46 @@ async def cmd_start(message: Message):
     chat_id = message.chat.id
     
     try:
-        logger.info(f"🚀 [AIogram] Получена команда /start от пользователя {chat_id}")
+        logger.info(f"🚀 Получена команда /start от пользователя {chat_id}")
         
         # Создаем или получаем пользователя в базе данных
         user = await db_service.get_or_create_user(telegram_id=chat_id)
         logger.info(f"👤 Пользователь создан/получен: id={user.id}, telegram_id={chat_id}")
         
-        # Отправляем приветственное сообщение
-        success = await telegram_service.send_start_message(chat_id)
+        # Формируем приветственное сообщение
+        welcome_text = """
+👋 <b>Добро пожаловать в PRIZMA!</b>
+
+Ваш личный ИИ психолог и наставник поможет вам:
+
+🧠 Расшифровать вашу личность на 100%
+📊 Получить глубокий психологический анализ
+💡 Узнать свои сильные стороны и зоны роста
+🚀 Получить персональный план развития
+
+Начните свой путь к самопознанию прямо сейчас!
+        """.strip()
         
-        if success:
-            logger.info(f"✅ Приветственное сообщение отправлено пользователю {chat_id}")
-        else:
-            logger.error(f"❌ Не удалось отправить приветственное сообщение пользователю {chat_id}")
-            # Fallback: отправляем через aiogram напрямую
-            try:
-                await message.answer(
-                    "👋 Добро пожаловать в PRIZMA!\n\n"
-                    "Ваш личный ИИ психолог и наставник поможет вам:\n\n"
-                    "🧠 Расшифровать вашу личность на 100%\n"
-                    "📊 Получить глубокий психологический анализ\n"
-                    "💡 Узнать свои сильные стороны и зоны роста\n"
-                    "🚀 Получить персональный план развития"
+        # Создаем кнопку для открытия Web App
+        webapp_url = os.getenv("WEBAPP_URL", "")
+        if webapp_url:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text="🚀 Начать тест",
+                    web_app={"url": f"{webapp_url.rstrip('/')}/index.html"}
                 )
-            except Exception as fallback_error:
-                logger.error(f"❌ Ошибка при отправке fallback сообщения: {fallback_error}")
+            ]])
+        else:
+            keyboard = None
+        
+        # Отправляем сообщение через aiogram
+        await message.answer(
+            welcome_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+        logger.info(f"✅ Приветственное сообщение отправлено пользователю {chat_id}")
             
     except Exception as e:
         logger.error(f"❌ Ошибка при обработке команды /start для пользователя {chat_id}: {e}")
