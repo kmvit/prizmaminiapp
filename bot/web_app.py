@@ -1880,6 +1880,29 @@ async def startup_event():
 # TELEGRAM BOT WEBHOOK HANDLERS
 # ========================================
 
+@app.post("/api/telegram/setup-webhook", summary="Настроить webhook для Telegram бота")
+async def setup_telegram_webhook():
+    """Настроить webhook для получения обновлений от Telegram"""
+    try:
+        from bot.services.telegram_service import telegram_service
+        
+        if not telegram_service.enabled:
+            return {"status": "error", "message": "Telegram сервис отключен (BOT_TOKEN не настроен)"}
+        
+        webhook_url = f"{settings.WEBAPP_URL}/api/telegram/webhook" if settings else None
+        if not webhook_url:
+            return {"status": "error", "message": "WEBAPP_URL не настроен"}
+        
+        success = await telegram_service.set_webhook(webhook_url)
+        
+        if success:
+            return {"status": "success", "message": f"Webhook успешно настроен: {webhook_url}"}
+        else:
+            return {"status": "error", "message": "Не удалось настроить webhook"}
+    except Exception as e:
+        logger.error(f"❌ Ошибка при настройке webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.post("/api/telegram/webhook", summary="Webhook для обработки обновлений от Telegram")
 async def telegram_webhook(request: Request):
     """Обработка webhook'ов от Telegram Bot API"""
