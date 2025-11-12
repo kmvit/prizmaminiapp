@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     TELEGRAM_WEBAPP_URL: str = "https://t.me/myprizma_bot/psy" # URL вашего Telegram Web App
     DATABASE_URL: str
     PERPLEXITY_API_KEY: str = ""  # Делаем необязательным
-    PERPLEXITY_MODEL: str = "sonar"  # Модель по умолчанию
+    PERPLEXITY_MODEL: str = "sonar-pro"  # Модель по умолчанию
     PERPLEXITY_ENABLED: bool = False  # По умолчанию отключено
 
     ROBOKASSA_LOGIN: str

@@ -1876,5 +1876,63 @@ async def startup_event():
     logger.info("🚀 Запуск фоновой задачи проверки таймеров...")
     asyncio.create_task(background_timer_checker())
 
+# ========================================
+# TELEGRAM BOT WEBHOOK HANDLERS
+# ========================================
+
+@app.post("/api/telegram/webhook", summary="Webhook для обработки обновлений от Telegram")
+async def telegram_webhook(request: Request):
+    """Обработка webhook'ов от Telegram Bot API"""
+    try:
+        # Получаем данные обновления от Telegram
+        update = await request.json()
+        logger.info(f"📨 Получено обновление от Telegram: {update}")
+        
+        # Проверяем, что это сообщение
+        if "message" not in update:
+            logger.warning("⚠️ Обновление не содержит сообщения")
+            return {"ok": True}
+        
+        message = update["message"]
+        
+        # Проверяем, что это текстовая команда
+        if "text" not in message:
+            logger.warning("⚠️ Сообщение не содержит текста")
+            return {"ok": True}
+        
+        text = message["text"]
+        chat_id = message["chat"]["id"]
+        
+        # Обрабатываем команду /start (работает для всех пользователей, включая существующих)
+        if text.startswith("/start"):
+            logger.info(f"🚀 Получена команда /start от пользователя {chat_id}")
+            
+            # Импортируем telegram_service
+            from bot.services.telegram_service import telegram_service
+            
+            # Создаем или получаем пользователя в базе данных (не важно, новый или существующий)
+            user = await db_service.get_or_create_user(telegram_id=chat_id)
+            logger.info(f"👤 Пользователь создан/получен: id={user.id}, telegram_id={chat_id}, is_new={user.id if hasattr(user, 'id') else 'unknown'}")
+            
+            # ВСЕГДА отправляем приветственное сообщение, независимо от того, новый пользователь или существующий
+            success = await telegram_service.send_start_message(chat_id)
+            
+            if success:
+                logger.info(f"✅ Приветственное сообщение отправлено пользователю {chat_id}")
+            else:
+                logger.error(f"❌ Не удалось отправить приветственное сообщение пользователю {chat_id}")
+            
+            return {"ok": True}
+        
+        # Для других команд можно добавить обработку здесь
+        logger.info(f"ℹ️ Получена неизвестная команда: {text}")
+        return {"ok": True}
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка при обработке webhook от Telegram: {e}")
+        import traceback
+        logger.error(f"📋 Traceback: {traceback.format_exc()}")
+        return {"ok": False, "error": str(e)}
+
 # Подключение статических файлов в конце (после всех API маршрутов)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
