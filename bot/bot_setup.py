@@ -1,9 +1,9 @@
 """
 Настройка и инициализация Telegram бота через aiogram
+Использует polling для получения обновлений (не требует webhook)
 """
 import os
 from aiogram import Bot, Dispatcher
-from aiogram.types import Update
 from bot.handlers import start
 from bot.utils.logger import get_logger
 
@@ -26,50 +26,37 @@ else:
     logger.warning("⚠️ BOT_TOKEN не настроен, aiogram бот не инициализирован")
 
 
-async def process_update(update_dict: dict) -> bool:
-    """
-    Обработать обновление от Telegram через aiogram dispatcher
-    
-    Args:
-        update_dict: Словарь с данными обновления от Telegram
-        
-    Returns:
-        True если обработка прошла успешно
-    """
+async def start_polling():
+    """Запустить polling для получения обновлений от Telegram"""
     if not bot or not dp:
-        logger.warning("⚠️ Бот не инициализирован, обновление не обработано")
-        return False
+        logger.warning("⚠️ Бот не инициализирован, polling не запущен")
+        return
     
     try:
-        logger.info(f"🔄 [bot_setup] Обработка обновления через aiogram")
-        
-        # Создаем объект Update из словаря
-        # В aiogram 3.x нужно использовать model_validate для создания объектов из JSON
+        logger.info("🔄 Запуск polling для получения обновлений от Telegram...")
+        # Удаляем webhook если он был настроен (чтобы использовать polling)
         try:
-            update = Update.model_validate(update_dict)
-            logger.info(f"✅ [bot_setup] Update объект создан через model_validate")
-        except Exception as parse_error:
-            # Fallback: пытаемся создать через конструктор
-            logger.warning(f"⚠️ [bot_setup] Ошибка при парсинге Update через model_validate: {parse_error}")
-            try:
-                update = Update(**update_dict)
-                logger.info(f"✅ [bot_setup] Update объект создан через конструктор")
-            except Exception as constr_error:
-                logger.error(f"❌ [bot_setup] Ошибка при создании Update через конструктор: {constr_error}")
-                raise
+            await bot.delete_webhook(drop_pending_updates=True)
+            logger.info("✅ Старый webhook удален")
+        except Exception as e:
+            logger.debug(f"ℹ️ Webhook не был настроен или ошибка при удалении: {e}")
         
-        # Обрабатываем обновление через диспетчер
-        # В aiogram 3.x используем feed_update с bot и update
-        logger.info(f"🔄 [bot_setup] Передаем обновление в диспетчер...")
-        await dp.feed_update(bot, update)
-        
-        logger.info(f"✅ [bot_setup] Обновление обработано диспетчером")
-        return True
+        # Запускаем polling
+        await dp.start_polling(bot, skip_updates=True)
     except Exception as e:
-        logger.error(f"❌ Ошибка при обработке обновления через aiogram: {e}")
+        logger.error(f"❌ Ошибка при запуске polling: {e}")
         import traceback
         logger.error(f"📋 Traceback: {traceback.format_exc()}")
-        return False
+
+
+async def stop_polling():
+    """Остановить polling"""
+    if dp:
+        try:
+            await dp.stop_polling()
+            logger.info("✅ Polling остановлен")
+        except Exception as e:
+            logger.error(f"❌ Ошибка при остановке polling: {e}")
 
 
 async def close_bot():

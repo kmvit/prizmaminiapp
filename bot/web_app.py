@@ -1876,24 +1876,13 @@ async def startup_event():
     logger.info("🚀 Запуск фоновой задачи проверки таймеров...")
     asyncio.create_task(background_timer_checker())
     
-    # Инициализируем aiogram бота при старте
-    from bot.bot_setup import bot, dp
+    # Запускаем aiogram polling для получения обновлений
+    from bot.bot_setup import bot, dp, start_polling
     if bot and dp:
         logger.info("✅ Aiogram бот готов к работе")
-        
-        # Проверяем статус webhook
-        try:
-            from bot.services.telegram_service import telegram_service
-            if telegram_service.enabled:
-                webhook_info = await telegram_service.get_webhook_info()
-                webhook_url = webhook_info.get("url", "")
-                if webhook_url:
-                    logger.info(f"📡 Webhook настроен: {webhook_url}")
-                else:
-                    logger.warning("⚠️ Webhook не настроен! Обновления не будут приходить.")
-                    logger.warning("⚠️ Настройте webhook через: POST /api/telegram/setup-webhook")
-        except Exception as e:
-            logger.warning(f"⚠️ Не удалось проверить статус webhook: {e}")
+        # Запускаем polling в фоновой задаче
+        asyncio.create_task(start_polling())
+        logger.info("🔄 Polling запущен - бот будет получать обновления автоматически")
     else:
         logger.warning("⚠️ Aiogram бот не инициализирован (проверьте BOT_TOKEN)")
 
@@ -1901,7 +1890,8 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Закрытие соединений при завершении приложения"""
-    from bot.bot_setup import close_bot
+    from bot.bot_setup import stop_polling, close_bot
+    await stop_polling()
     await close_bot()
     logger.info("✅ Ресурсы бота освобождены")
 
