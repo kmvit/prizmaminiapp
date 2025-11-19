@@ -470,7 +470,43 @@ async def start_report_generation(telegram_id: int):
             logger.warning(f"⚠️ Пользователь {telegram_id} оплатил премиум отчет. Не запускаем бесплатную генерацию.")
             return {"status": "premium_paid", "message": "Для оплативших премиум пользователей используется премиум отчет."}
         
+        # Проверяем, не генерируется ли уже отчет
+        is_generating = await db_service.is_report_generating(telegram_id, "free")
+        if is_generating:
+            logger.info(f"⏳ Отчет уже генерируется для пользователя {telegram_id}")
+            return {"status": "already_processing", "message": "Отчет уже генерируется. Пожалуйста, подождите."}
+        
+        # Проверяем, не существует ли уже готовый отчет
+        import glob
+        reports_dir = Path("reports")
+        pattern = f"prizma_report_{telegram_id}_*.pdf"
+        report_files = glob.glob(str(reports_dir / pattern))
+        if report_files:
+            logger.info(f"✅ Отчет уже существует для пользователя {telegram_id}, не запускаем повторную генерацию")
+            # Сортируем и берем последний
+            def extract_timestamp(filepath):
+                filename = Path(filepath).name
+                parts = filename.split('_')
+                if len(parts) >= 5:
+                    try:
+                        date_part = parts[3]
+                        time_part = parts[4].replace('.pdf', '')
+                        return f"{date_part}_{time_part}"
+                    except:
+                        pass
+                return str(int(Path(filepath).stat().st_mtime))
+            report_files.sort(key=extract_timestamp, reverse=True)
+            latest_report = report_files[0]
+            return {"status": "already_exists", "message": "Отчет уже существует", "report_path": latest_report}
+        
         logger.info(f"🚀 Запускаем синхронную генерацию БЕСПЛАТНОГО отчета для пользователя {telegram_id}")
+        
+        # Обновляем статус в БД перед генерацией
+        await db_service.update_report_generation_status(
+            telegram_id, 
+            "free", 
+            ReportGenerationStatus.PROCESSING
+        )
         
         # Запускаем синхронную генерацию отчета
         report_path = await generate_report_background(telegram_id)
@@ -515,7 +551,20 @@ async def download_personal_report(telegram_id: int, download: Optional[str] = N
         report_files = glob.glob(str(reports_dir / pattern))
         
         if not report_files:
+            # Проверяем, не генерируется ли уже отчет
+            is_generating = await db_service.is_report_generating(telegram_id, "free")
+            if is_generating:
+                logger.info(f"⏳ Отчет уже генерируется для пользователя {telegram_id}, ждем завершения...")
+                raise HTTPException(status_code=202, detail="Отчет генерируется. Пожалуйста, подождите и попробуйте позже.")
+            
             logger.warning(f"⚠️ Отчет для пользователя {telegram_id} не найден, запускаем генерацию...")
+            
+            # Обновляем статус в БД перед генерацией
+            await db_service.update_report_generation_status(
+                telegram_id, 
+                "free", 
+                ReportGenerationStatus.PROCESSING
+            )
             
             # Запускаем генерацию отчета и ждем завершения
             try:
@@ -604,6 +653,71 @@ async def generate_report_background(telegram_id: int):
         # Получаем пользователя
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
+        # ВАЖНО: Проверяем статус ПЕРЕД установкой нового статуса
+        # Проверяем, не генерируется ли уже отчет
+        is_generating = await db_service.is_report_generating(telegram_id, "free")
+        if is_generating:
+            logger.warning(f"⚠️ Отчет уже генерируется для пользователя {telegram_id}, пропускаем повторную генерацию")
+            # Получаем существующий отчет, если есть
+            import glob
+            reports_dir = Path("reports")
+            pattern = f"prizma_report_{telegram_id}_*.pdf"
+            report_files = glob.glob(str(reports_dir / pattern))
+            if report_files:
+                def extract_timestamp(filepath):
+                    filename = Path(filepath).name
+                    parts = filename.split('_')
+                    if len(parts) >= 5:
+                        try:
+                            date_part = parts[3]
+                            time_part = parts[4].replace('.pdf', '')
+                            return f"{date_part}_{time_part}"
+                        except:
+                            pass
+                    return str(int(Path(filepath).stat().st_mtime))
+                report_files.sort(key=extract_timestamp, reverse=True)
+                return report_files[0]
+            return None
+        
+        # Проверяем, не существует ли уже готовый отчет
+        import glob
+        reports_dir = Path("reports")
+        pattern = f"prizma_report_{telegram_id}_*.pdf"
+        report_files = glob.glob(str(reports_dir / pattern))
+        if report_files:
+            logger.info(f"✅ Отчет уже существует для пользователя {telegram_id}, возвращаем существующий")
+            # Обновляем статус на COMPLETED, если он еще не установлен
+            status_info = await db_service.get_report_generation_status(telegram_id, "free")
+            if status_info.get("status") != "COMPLETED":
+                await db_service.update_report_generation_status(
+                    telegram_id, 
+                    "free", 
+                    ReportGenerationStatus.COMPLETED,
+                    report_path=report_files[0]
+                )
+            def extract_timestamp(filepath):
+                filename = Path(filepath).name
+                parts = filename.split('_')
+                if len(parts) >= 5:
+                    try:
+                        date_part = parts[3]
+                        time_part = parts[4].replace('.pdf', '')
+                        return f"{date_part}_{time_part}"
+                    except:
+                        pass
+                return str(int(Path(filepath).stat().st_mtime))
+            report_files.sort(key=extract_timestamp, reverse=True)
+            return report_files[0]
+        
+        # ВАЖНО: Устанавливаем статус PROCESSING ПЕРЕД началом генерации
+        # Это предотвратит повторную генерацию при повторном открытии приложения
+        logger.info(f"📝 Устанавливаем статус PROCESSING для пользователя {telegram_id}")
+        await db_service.update_report_generation_status(
+            telegram_id, 
+            "free", 
+            ReportGenerationStatus.PROCESSING
+        )
+        
         # Получаем ответы и вопросы
         answers = await db_service.get_user_answers(telegram_id)
         questions = await db_service.get_questions()
@@ -617,6 +731,14 @@ async def generate_report_background(telegram_id: int):
         if result.get("success"):
             report_path = result['report_file']
             logger.info(f"✅ Фоновая генерация отчета завершена успешно для пользователя {telegram_id}: {report_path}")
+            
+            # Обновляем статус на COMPLETED
+            await db_service.update_report_generation_status(
+                telegram_id, 
+                "free", 
+                ReportGenerationStatus.COMPLETED,
+                report_path=report_path
+            )
             
             # НЕ удаляем данные пользователя - оставляем их для возможного повторного прохождения
             
@@ -640,6 +762,14 @@ async def generate_report_background(telegram_id: int):
             error_msg = result.get('error', 'Неизвестная ошибка')
             logger.error(f"❌ Ошибка фоновой генерации отчета для пользователя {telegram_id}: {error_msg}")
             
+            # Обновляем статус на FAILED
+            await db_service.update_report_generation_status(
+                telegram_id, 
+                "free", 
+                ReportGenerationStatus.FAILED,
+                error=error_msg
+            )
+            
             # Отправляем уведомление об ошибке в Telegram
             from bot.services.telegram_service import telegram_service
             await telegram_service.send_error_notification(
@@ -650,13 +780,25 @@ async def generate_report_background(telegram_id: int):
             return None
             
     except Exception as e:
-        logger.error(f"❌ Критическая ошибка фоновой генерации отчета для пользователя {telegram_id}: {e}")
+        error_msg = str(e)
+        logger.error(f"❌ Критическая ошибка фоновой генерации отчета для пользователя {telegram_id}: {error_msg}")
+        
+        # Обновляем статус на FAILED при критической ошибке
+        try:
+            await db_service.update_report_generation_status(
+                telegram_id, 
+                "free", 
+                ReportGenerationStatus.FAILED,
+                error=error_msg
+            )
+        except Exception as update_error:
+            logger.error(f"❌ Ошибка обновления статуса на FAILED: {update_error}")
         
         # Отправляем уведомление об ошибке в Telegram
         from bot.services.telegram_service import telegram_service
         await telegram_service.send_error_notification(
             telegram_id=telegram_id,
-            error_message=str(e)
+            error_message=error_msg
         )
         
         return None
