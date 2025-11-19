@@ -131,10 +131,9 @@ class TelegramService:
             if file_size_mb >= self.max_document_mb or not download_url:
                 if file_size_mb >= self.max_document_mb:
                     logger.warning(f"⚠️ Файл слишком большой для отправки через бота ({file_size_mb} МБ ≥ {self.max_document_mb} МБ). Отправляем ссылку.")
-                # Отправляем ссылку на скачивание с кнопкой (откроется в системном браузере)
+                # Отправляем ссылку на скачивание в тексте сообщения
                 link_message = self._compose_link_message(is_premium, download_url)
-                keyboard = self._build_download_keyboard(download_url, is_premium)
-                success = await self.send_message_with_keyboard(telegram_id, link_message, keyboard)
+                success = await self.send_message(telegram_id, link_message)
                 
                 # Если это бесплатный отчет, отправляем предложение премиум-отчета
                 if success and not is_premium:
@@ -161,8 +160,7 @@ class TelegramService:
             # Фоллбэк: не удалось отправить файл — отправляем ссылку на скачивание
             logger.error(f"❌ Не удалось отправить файл пользователю {telegram_id}, отправляем ссылку")
             link_message = self._compose_link_message(is_premium, download_url)
-            keyboard = self._build_download_keyboard(download_url, is_premium)
-            success = await self.send_message_with_keyboard(telegram_id, link_message, keyboard)
+            success = await self.send_message(telegram_id, link_message)
             
             # Если это бесплатный отчет, отправляем предложение премиум-отчета
             if success and not is_premium:
@@ -479,23 +477,12 @@ PRIZMA – ваш личный тренер по развитию, доступ�
     def _compose_link_message(self, is_premium: bool, url: str) -> str:
         """Сформировать текст сообщения со ссылкой на скачивание"""
         report_word = "Премиум-отчет" if is_premium else "Отчет"
+        link_text = url or "в веб-приложении"
         return (
             f"🎉 <b>{report_word} готов!</b>\n\n"
-            f"📄 Мы проанализировали ваши ответы и создали персональный психологический портрет.\n\n"
-            f"📥 Нажмите кнопку ниже, чтобы скачать отчет в системном браузере."
+            f"📥 <b>Скачать:</b> {link_text}\n\n"
+            f"ℹ️ Если ссылка не открывается, скопируйте ее и откройте в браузере."
         )
-    
-    def _build_download_keyboard(self, url: str, is_premium: bool) -> dict:
-        """Создать inline клавиатуру с кнопкой для скачивания (откроется в системном браузере)"""
-        button_text = "📥 Скачать премиум-отчет" if is_premium else "📥 Скачать отчет"
-        return {
-            "inline_keyboard": [[
-                {
-                    "text": button_text,
-                    "url": url  # url вместо web_app - откроется в системном браузере
-                }
-            ]]
-        }
     
     async def send_error_notification(self, telegram_id: int, error_message: str) -> bool:
         """Отправить уведомление об ошибке"""

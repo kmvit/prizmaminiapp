@@ -1347,21 +1347,16 @@ async def download_premium_personal_report(telegram_id: int, download: Optional[
         logger.info(f"📄 Отдаем готовый платный отчет: {latest_report}, размер: {os.path.getsize(latest_report)} байт")
         
         # Определяем заголовки для скачивания
-        headers = {}
+        headers = {
+            "Content-Disposition": f'attachment; filename="prizma-premium-report-{telegram_id}.pdf"',
+            "Content-Type": "application/pdf",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+        logger.info("📱 Принудительное скачивание платного отчета (всегда attachment для iPhone Safari)")
         
-        # Для принудительного скачивания (из Telegram Web App)
-        if download == "1":
-            headers["Content-Disposition"] = f'attachment; filename="prizma-premium-report-{telegram_id}.pdf"'
-            headers["Content-Type"] = "application/pdf"
-            headers["X-Content-Type-Options"] = "nosniff"
-            headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            headers["Pragma"] = "no-cache"
-            headers["Expires"] = "0"
-            logger.info("📱 Принудительное скачивание платного отчета для Telegram Web App")
-        else:
-            # Обычное открытие в браузере
-            headers["Content-Disposition"] = f'inline; filename="prizma-premium-report-{telegram_id}.pdf"'
-            logger.info("🌐 Обычное открытие платного отчета в браузере")
         
         # Возвращаем файл для скачивания
         return FileResponse(
