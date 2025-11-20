@@ -10,7 +10,7 @@ import decimal
 import time
 
 from bot.services.database_service import db_service
-from bot.config import BASE_DIR, PERPLEXITY_ENABLED, settings
+from bot.config import BASE_DIR, PERPLEXITY_ENABLED, settings, PREMIUM_PRICE_ORIGINAL, PREMIUM_PRICE_DISCOUNT
 from bot.models.api_models import (
     AnswerRequest, UserProfileUpdate, CurrentQuestionResponse, 
     NextQuestionResponse, UserProgressResponse, UserProfileResponse,
@@ -901,15 +901,15 @@ async def start_premium_payment(telegram_id: int):
             
             if is_offer_active:
                 # Спецпредложение активно - скидочная цена
-                amount_decimal = decimal.Decimal(3590.00)
+                amount_decimal = decimal.Decimal(str(PREMIUM_PRICE_DISCOUNT))
                 logger.info(f"💰 Спецпредложение активно для пользователя {telegram_id}, цена: {amount_decimal}")
             else:
                 # Спецпредложение истекло - полная цена
-                amount_decimal = decimal.Decimal(6980.00)
+                amount_decimal = decimal.Decimal(str(PREMIUM_PRICE_ORIGINAL))
                 logger.info(f"💰 Спецпредложение истекло для пользователя {telegram_id}, цена: {amount_decimal}")
         else:
             # Таймер не запущен - полная цена
-            amount_decimal = decimal.Decimal(6980.00)
+            amount_decimal = decimal.Decimal(str(PREMIUM_PRICE_ORIGINAL))
             logger.info(f"💰 Таймер не запущен для пользователя {telegram_id}, цена: {amount_decimal}")
         
         amount_in_kopecks = int(amount_decimal * 100) # Преобразуем в копейки (целое число)
@@ -1735,8 +1735,8 @@ async def get_special_offer_timer(telegram_id: int):
                 "message": "Таймер спецпредложения не запущен",
                 "timer": None,
                 "pricing": {
-                    "current_price": 6980,
-                    "original_price": 6980,
+                    "current_price": int(PREMIUM_PRICE_ORIGINAL),
+                    "original_price": int(PREMIUM_PRICE_ORIGINAL),
                     "is_offer_active": False
                 }
             }
@@ -1756,13 +1756,13 @@ async def get_special_offer_timer(telegram_id: int):
         # Определяем цену в зависимости от таймера
         if remaining_time > 0:
             # Спецпредложение активно - скидочная цена
-            current_price = 3590
-            original_price = 6980
+            current_price = int(PREMIUM_PRICE_DISCOUNT)
+            original_price = int(PREMIUM_PRICE_ORIGINAL)
             is_offer_active = True
         else:
             # Спецпредложение истекло - полная цена
-            current_price = 6980
-            original_price = 6980
+            current_price = int(PREMIUM_PRICE_ORIGINAL)
+            original_price = int(PREMIUM_PRICE_ORIGINAL)
             is_offer_active = False
         
 
