@@ -19,11 +19,15 @@ window.PricePage = {
             this.setupEventHandlers();
             // Обновляем текст кнопки в зависимости от статуса пользователя
             this.updateButtonText();
+            // Обновляем цену премиум отчета
+            this.updatePremiumPrice();
         }).catch(error => {
             console.error('❌ Ошибка при инициализации страницы цен:', error);
             // В случае ошибки все равно настраиваем обработчики
             this.setupTelegramUI();
             this.setupEventHandlers();
+            // Пытаемся обновить цену даже при ошибке
+            this.updatePremiumPrice();
         });
     },
 
@@ -279,6 +283,38 @@ window.PricePage = {
         } catch (error) {
             console.error('❌ Ошибка при проверке статуса платежа:', error);
             console.log('🔄 Продолжаем загрузку страницы цен');
+        }
+    },
+
+    /**
+     * Обновление цены премиум отчета
+     */
+    async updatePremiumPrice() {
+        try {
+            const telegramId = window.TelegramWebApp ? window.TelegramWebApp.getUserId() : 123456789;
+            
+            // Получаем информацию о таймере и ценах
+            const timerData = await ApiClient.getSpecialOfferTimer(telegramId);
+            
+            if (timerData && timerData.pricing) {
+                const priceElement = document.querySelector('.decoding-buy-price');
+                if (priceElement) {
+                    // Форматируем цену с разделителем тысяч
+                    const formattedPrice = timerData.pricing.current_price.toLocaleString('ru-RU');
+                    priceElement.textContent = formattedPrice;
+                    console.log(`💰 Цена премиум отчета обновлена: ${formattedPrice}р`);
+                }
+            } else {
+                // Если API не вернул данные, используем fallback
+                console.warn('⚠️ Не удалось получить цену из API, используем fallback');
+                const priceElement = document.querySelector('.decoding-buy-price');
+                if (priceElement && priceElement.textContent === '—') {
+                    // Оставляем placeholder, если цена не получена
+                }
+            }
+        } catch (error) {
+            console.error('❌ Ошибка при обновлении цены премиум отчета:', error);
+            // В случае ошибки оставляем placeholder
         }
     },
 
