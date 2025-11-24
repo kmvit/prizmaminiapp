@@ -131,10 +131,9 @@ class TelegramService:
             if file_size_mb >= self.max_document_mb or not download_url:
                 if file_size_mb >= self.max_document_mb:
                     logger.warning(f"⚠️ Файл слишком большой для отправки через бота ({file_size_mb} МБ ≥ {self.max_document_mb} МБ). Отправляем ссылку.")
-                # Отправляем ссылку на скачивание с кнопкой для копирования
+                # Отправляем ссылку на скачивание
                 link_message = self._compose_link_message(is_premium, download_url)
-                keyboard = self._compose_link_keyboard(telegram_id, is_premium)
-                success = await self.send_message_with_keyboard(telegram_id, link_message, keyboard)
+                success = await self.send_message(telegram_id, link_message)
                 
                 # Если это бесплатный отчет, отправляем предложение премиум-отчета
                 if success and not is_premium:
@@ -152,10 +151,9 @@ class TelegramService:
             if success:
                 logger.info(f"✅ Уведомление о готовности отчета отправлено пользователю {telegram_id}")
                 
-                # Отправляем отдельное сообщение с кнопкой для копирования ссылки
+                # Отправляем отдельное сообщение со ссылкой
                 link_message = self._compose_link_message(is_premium, download_url)
-                keyboard = self._compose_link_keyboard(telegram_id, is_premium)
-                await self.send_message_with_keyboard(telegram_id, link_message, keyboard)
+                await self.send_message(telegram_id, link_message)
                 
                 # Если это бесплатный отчет, отправляем предложение премиум-отчета
                 if not is_premium:
@@ -166,8 +164,7 @@ class TelegramService:
             # Фоллбэк: не удалось отправить файл — отправляем ссылку на скачивание
             logger.error(f"❌ Не удалось отправить файл пользователю {telegram_id}, отправляем ссылку")
             link_message = self._compose_link_message(is_premium, download_url)
-            keyboard = self._compose_link_keyboard(telegram_id, is_premium)
-            success = await self.send_message_with_keyboard(telegram_id, link_message, keyboard)
+            success = await self.send_message(telegram_id, link_message)
             
             # Если это бесплатный отчет, отправляем предложение премиум-отчета
             if success and not is_premium:
@@ -486,19 +483,10 @@ PRIZMA – ваш личный тренер по развитию, доступ�
         report_word = "Премиум-отчет" if is_premium else "Отчет"
         return (
             f"🎉 <b>{report_word} готов!</b>\n\n"
-            f"📥 Нажмите на кнопку <b>ссылка</b> ниже, чтобы скопировать ссылку на отчет."
+            f"🔗 <b>Ссылка на отчет:</b>\n\n"
+            f"<code>{url}</code>\n\n"
+            f"Нажмите на ссылку выше, чтобы скопировать её."
         )
-    
-    def _compose_link_keyboard(self, telegram_id: int, is_premium: bool) -> dict:
-        """Сформировать inline клавиатуру с кнопкой для копирования ссылки"""
-        return {
-            "inline_keyboard": [[
-                {
-                    "text": "🔗 Ссылка",
-                    "callback_data": f"copy_link_{telegram_id}_{'premium' if is_premium else 'free'}"
-                }
-            ]]
-        }
     
     async def send_error_notification(self, telegram_id: int, error_message: str) -> bool:
         """Отправить уведомление об ошибке"""
