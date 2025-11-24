@@ -68,13 +68,8 @@ window.LoadingPage = {
                     try { localStorage.setItem('prizma_report_ready', JSON.stringify({ type: 'premium', t: Date.now() })); } catch(_) {}
                     window.location.href = 'download.html';
                 } else if (status.available_report.type === 'free') {
-                    console.log('🆓 Бесплатный отчет готов, остаемся на loading - отчет придет в бот');
-                    // Не переходим на price-offer, остаемся на loading - отчет придет в бот
-                    // Показываем сообщение пользователю
-                    try { 
-                        window.TelegramWebApp?.showAlert('Ваш отчет готов! Мы отправили его вам в боте. Проверьте сообщения в Telegram.');
-                    } catch (_) {}
-                    // Можно закрыть приложение или оставить на loading
+                    console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
+                    window.location.href = 'price-offer.html';
                     return;
                 } else {
                     console.log('❓ Неизвестный тип отчета, остаемся на loading');
@@ -85,11 +80,8 @@ window.LoadingPage = {
             
             // Проверяем, есть ли уже готовый бесплатный отчет
             if (status.free_report_status && status.free_report_status.status === 'ready') {
-                console.log('✅ Бесплатный отчет уже готов, остаемся на loading - отчет придет в бот');
-                // Не переходим на price-offer, остаемся на loading - отчет придет в бот
-                try { 
-                    window.TelegramWebApp?.showAlert('Ваш отчет готов! Мы отправили его вам в боте. Проверьте сообщения в Telegram.');
-                } catch (_) {}
+                console.log('✅ Бесплатный отчет уже готов, перенаправляем на price-offer');
+                window.location.href = 'price-offer.html';
                 return;
             }
             
@@ -209,11 +201,8 @@ window.LoadingPage = {
                         return;
                     }
                 } else if (status.available_report.type === 'free') {
-                    console.log('🆓 Бесплатный отчет готов, остаемся на loading - отчет придет в бот');
-                    // Не переходим на price-offer, остаемся на loading - отчет придет в бот
-                    try { 
-                        window.TelegramWebApp?.showAlert('Ваш отчет готов! Мы отправили его вам в боте. Проверьте сообщения в Telegram.');
-                    } catch (_) {}
+                    console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
+                    window.location.href = 'price-offer.html';
                     return;
                 } else {
                     console.log('❓ Неизвестный тип отчета, остаемся на loading');
