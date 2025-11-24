@@ -470,6 +470,9 @@ async def start_report_generation(telegram_id: int):
             logger.warning(f"⚠️ Пользователь {telegram_id} оплатил премиум отчет. Не запускаем бесплатную генерацию.")
             return {"status": "premium_paid", "message": "Для оплативших премиум пользователей используется премиум отчет."}
         
+        # Сбрасываем зависшие отчеты перед проверкой
+        await db_service.reset_stuck_reports(telegram_id)
+        
         # Проверяем, не генерируется ли уже отчет
         is_generating = await db_service.is_report_generating(telegram_id, "free")
         if is_generating:
@@ -499,7 +502,7 @@ async def start_report_generation(telegram_id: int):
             latest_report = report_files[0]
             return {"status": "already_exists", "message": "Отчет уже существует", "report_path": latest_report}
         
-        logger.info(f"🚀 Запускаем синхронную генерацию БЕСПЛАТНОГО отчета для пользователя {telegram_id}")
+        logger.info(f"🚀 Запускаем асинхронную генерацию БЕСПЛАТНОГО отчета для пользователя {telegram_id}")
         
         # Обновляем статус в БД перед генерацией
         await db_service.update_report_generation_status(
@@ -508,13 +511,12 @@ async def start_report_generation(telegram_id: int):
             ReportGenerationStatus.PROCESSING
         )
         
-        # Запускаем синхронную генерацию отчета
-        report_path = await generate_report_background(telegram_id)
+        # Запускаем генерацию в фоне (не ждем завершения)
+        import asyncio
+        asyncio.create_task(generate_report_background(telegram_id))
         
-        if report_path:
-            return {"status": "success", "message": "Отчет успешно сгенерирован", "report_path": report_path}
-        else:
-            return {"status": "error", "message": "Ошибка при генерации отчета"}
+        logger.info(f"✅ Генерация отчета запущена в фоне для пользователя {telegram_id}")
+        return {"status": "processing", "message": "Генерация отчета запущена. Мы пришлем вам отчет в боте, как только он будет готов."}
             
     except Exception as e:
         logger.error(f"Error starting report generation: {e}")

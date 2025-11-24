@@ -398,7 +398,12 @@ window.QuestionPage = {
             
             // Перенаправляем на следующий вопрос или на загрузку
             const progress = await ApiClient.getUserProgress(telegramId);
-            if (progress.progress.answered >= progress.progress.total) {
+            // Для бесплатных пользователей проверяем free_questions_limit, для премиум - total
+            const isFreeUser = !progress.user || !progress.user.is_paid;
+            const questionsLimit = isFreeUser ? progress.progress.free_questions_limit : progress.progress.total;
+            
+            if (progress.progress.answered >= questionsLimit) {
+                console.log('✅ Пользователь завершил вопросы, переходим на loading.html');
                 window.location.href = 'loading.html';
             } else {
                 // Перезагружаем страницу для следующего вопроса
