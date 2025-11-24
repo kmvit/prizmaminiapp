@@ -456,7 +456,7 @@ async def check_report_status(telegram_id: int):
         return {"status": "error", "message": "Ошибка при проверке статуса отчета"}
 
 @app.post("/api/user/{telegram_id}/generate-report", summary="Запустить генерацию отчета")
-async def start_report_generation(telegram_id: int):
+async def start_report_generation(telegram_id: int, background_tasks: BackgroundTasks):
     """Запустить генерацию отчета пользователя"""
     try:
         # Проверяем, что пользователь завершил тест
@@ -511,9 +511,8 @@ async def start_report_generation(telegram_id: int):
             ReportGenerationStatus.PROCESSING
         )
         
-        # Запускаем генерацию в фоне (не ждем завершения)
-        import asyncio
-        asyncio.create_task(generate_report_background(telegram_id))
+        # Запускаем генерацию в фоне через BackgroundTasks (правильный способ в FastAPI)
+        background_tasks.add_task(generate_report_background, telegram_id)
         
         logger.info(f"✅ Генерация отчета запущена в фоне для пользователя {telegram_id}")
         return {"status": "processing", "message": "Генерация отчета запущена. Мы пришлем вам отчет в боте, как только он будет готов."}
@@ -655,32 +654,6 @@ async def generate_report_background(telegram_id: int):
         # Получаем пользователя
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
-        # ВАЖНО: Проверяем статус ПЕРЕД установкой нового статуса
-        # Проверяем, не генерируется ли уже отчет
-        is_generating = await db_service.is_report_generating(telegram_id, "free")
-        if is_generating:
-            logger.warning(f"⚠️ Отчет уже генерируется для пользователя {telegram_id}, пропускаем повторную генерацию")
-            # Получаем существующий отчет, если есть
-            import glob
-            reports_dir = Path("reports")
-            pattern = f"prizma_report_{telegram_id}_*.pdf"
-            report_files = glob.glob(str(reports_dir / pattern))
-            if report_files:
-                def extract_timestamp(filepath):
-                    filename = Path(filepath).name
-                    parts = filename.split('_')
-                    if len(parts) >= 5:
-                        try:
-                            date_part = parts[3]
-                            time_part = parts[4].replace('.pdf', '')
-                            return f"{date_part}_{time_part}"
-                        except:
-                            pass
-                    return str(int(Path(filepath).stat().st_mtime))
-                report_files.sort(key=extract_timestamp, reverse=True)
-                return report_files[0]
-            return None
-        
         # Проверяем, не существует ли уже готовый отчет
         import glob
         reports_dir = Path("reports")
@@ -711,14 +684,8 @@ async def generate_report_background(telegram_id: int):
             report_files.sort(key=extract_timestamp, reverse=True)
             return report_files[0]
         
-        # ВАЖНО: Устанавливаем статус PROCESSING ПЕРЕД началом генерации
-        # Это предотвратит повторную генерацию при повторном открытии приложения
-        logger.info(f"📝 Устанавливаем статус PROCESSING для пользователя {telegram_id}")
-        await db_service.update_report_generation_status(
-            telegram_id, 
-            "free", 
-            ReportGenerationStatus.PROCESSING
-        )
+        # Статус PROCESSING уже установлен в start_report_generation, поэтому просто продолжаем генерацию
+        logger.info(f"📝 Статус PROCESSING уже установлен для пользователя {telegram_id}, продолжаем генерацию")
         
         # Получаем ответы и вопросы
         answers = await db_service.get_user_answers(telegram_id)

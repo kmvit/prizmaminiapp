@@ -692,11 +692,11 @@ class DatabaseService:
                 
                 # Проверяем, не завис ли отчет в статусе PROCESSING
                 if user.report_generation_started_at:
-                    # Если отчет генерируется больше 30 минут, считаем его зависшим
+                    # Если отчет генерируется больше 10 минут, считаем его зависшим
                     time_diff = datetime.utcnow() - user.report_generation_started_at
                     logger.info(f"⏱️ Время с начала генерации: {time_diff}")
                     
-                    if time_diff > timedelta(minutes=30):
+                    if time_diff > timedelta(minutes=10):
                         logger.warning(f"⚠️ Сбрасываем зависший отчет для пользователя {telegram_id} (время генерации: {time_diff})")
                         
                         if user.free_report_status == ReportGenerationStatus.PROCESSING:
