@@ -1,9 +1,9 @@
 """
-Обработчик команды /start
+Обработчик команды /start и callback для копирования ссылки
 """
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from bot.services.database_service import db_service
 from bot.utils.logger import get_logger
 import os
@@ -66,6 +66,56 @@ async def cmd_start(message: Message):
         # Пытаемся отправить сообщение об ошибке пользователю
         try:
             await message.answer("❌ Произошла ошибка. Попробуйте позже.")
+        except:
+            pass
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("copy_link_"))
+async def handle_copy_link(callback: CallbackQuery):
+    """Обработка нажатия на кнопку копирования ссылки"""
+    try:
+        # Парсим данные из callback_data
+        parts = callback.data.split("_")
+        if len(parts) < 4:
+            await callback.answer("❌ Ошибка", show_alert=True)
+            return
+        
+        telegram_id = int(parts[2])
+        report_type = parts[3]
+        
+        # Проверяем, что это тот же пользователь
+        if callback.from_user.id != telegram_id:
+            await callback.answer("❌ Это не ваша ссылка", show_alert=True)
+            return
+        
+        # Формируем ссылку
+        webapp_url = os.getenv("WEBAPP_URL", "").rstrip("/")
+        if not webapp_url:
+            await callback.answer("❌ Ошибка: не настроен URL", show_alert=True)
+            return
+        
+        if report_type == "premium":
+            download_url = f"{webapp_url}/api/download/premium-report/{telegram_id}?download=1"
+        else:
+            download_url = f"{webapp_url}/api/download/report/{telegram_id}?download=1"
+        
+        # Показываем уведомление "скопировано"
+        await callback.answer("✅ Скопировано!", show_alert=False)
+        
+        # Отправляем сообщение со ссылкой в формате кода для копирования
+        await callback.message.answer(
+            f"🔗 <b>Ссылка на отчет:</b>\n\n<code>{download_url}</code>\n\nНажмите на ссылку выше, чтобы скопировать её.",
+            parse_mode="HTML"
+        )
+        
+        logger.info(f"✅ Ссылка отправлена пользователю {telegram_id} для копирования")
+            
+    except Exception as e:
+        logger.error(f"❌ Ошибка при обработке callback копирования ссылки: {e}")
+        import traceback
+        logger.error(f"📋 Traceback: {traceback.format_exc()}")
+        try:
+            await callback.answer("❌ Произошла ошибка", show_alert=True)
         except:
             pass
 
