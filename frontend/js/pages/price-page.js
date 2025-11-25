@@ -297,7 +297,9 @@ window.PricePage = {
             const timerData = await ApiClient.getSpecialOfferTimer(telegramId);
             
             if (timerData && timerData.pricing) {
-                const priceElement = document.querySelector('.decoding-buy-price');
+                // Ищем цену премиум отчета - это второй блок .decoding (не .decoding-base)
+                const premiumBlock = document.querySelector('.decoding:not(.decoding-base)');
+                const priceElement = premiumBlock ? premiumBlock.querySelector('.decoding-buy-price') : null;
                 if (priceElement) {
                     // Форматируем цену с разделителем тысяч
                     const formattedPrice = timerData.pricing.current_price.toLocaleString('ru-RU');
@@ -307,7 +309,8 @@ window.PricePage = {
             } else {
                 // Если API не вернул данные, используем fallback
                 console.warn('⚠️ Не удалось получить цену из API, используем fallback');
-                const priceElement = document.querySelector('.decoding-buy-price');
+                const premiumBlock = document.querySelector('.decoding:not(.decoding-base)');
+                const priceElement = premiumBlock ? premiumBlock.querySelector('.decoding-buy-price') : null;
                 if (priceElement && priceElement.textContent === '—') {
                     // Оставляем placeholder, если цена не получена
                 }
