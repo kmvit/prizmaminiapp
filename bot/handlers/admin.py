@@ -111,26 +111,65 @@ async def admin_all_users(callback: CallbackQuery):
         return
     
     try:
-        # Получаем номер страницы из callback_data
+        # Получаем параметры из callback_data
+        # Формат: admin_all_users:page:filter_premium:filter_free_report
         page = 1
+        filter_premium = "all"  # all, yes, no
+        filter_free_report = "all"  # all, yes, no
+        
         if ":" in callback.data:
-            try:
-                page = int(callback.data.split(":")[1])
-            except:
-                page = 1
+            parts = callback.data.split(":")
+            if len(parts) >= 2:
+                try:
+                    page = int(parts[1])
+                except:
+                    page = 1
+            if len(parts) >= 3:
+                filter_premium = parts[2]
+            if len(parts) >= 4:
+                filter_free_report = parts[3]
         
         users = await db_service.get_all_users()
+        
+        # Применяем фильтры
+        filtered_users = []
+        for user in users:
+            # Фильтр по премиум
+            if filter_premium == "yes" and not user.is_premium_paid:
+                continue
+            if filter_premium == "no" and user.is_premium_paid:
+                continue
+            
+            # Фильтр по бесплатному отчету
+            if filter_free_report == "yes" and not user.free_report_path:
+                continue
+            if filter_free_report == "no" and user.free_report_path:
+                continue
+            
+            filtered_users.append(user)
+        
         users_per_page = 5  # Меньше пользователей на страницу из-за подробной информации
-        total_pages = (len(users) + users_per_page - 1) // users_per_page if users else 1
+        total_pages = (len(filtered_users) + users_per_page - 1) // users_per_page if filtered_users else 1
         webapp_url = os.getenv("WEBAPP_URL", "").rstrip("/")
         
-        if not users:
-            text = "👥 <b>Пользователи</b>\n\nПользователей пока нет."
+        if not filtered_users:
+            text = "👥 <b>Пользователи</b>\n\n"
+            if filter_premium != "all" or filter_free_report != "all":
+                text += "Пользователей с выбранными фильтрами не найдено."
+            else:
+                text += "Пользователей пока нет."
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
             ])
         else:
-            text = f"👥 <b>Все пользователи</b>\n\nВсего: {len(users)} | Страница {page}/{total_pages}\n\n"
+            # Формируем текст с информацией о фильтрах
+            filter_text = ""
+            if filter_premium != "all":
+                filter_text += f" | Премиум: {'Да' if filter_premium == 'yes' else 'Нет'}"
+            if filter_free_report != "all":
+                filter_text += f" | Бесп. отчет: {'Есть' if filter_free_report == 'yes' else 'Нет'}"
+            
+            text = f"👥 <b>Все пользователи</b>\n\nВсего: {len(filtered_users)} из {len(users)}{filter_text} | Страница {page}/{total_pages}\n\n"
             
             # Функция для форматирования даты
             def format_date(dt):
@@ -166,7 +205,7 @@ async def admin_all_users(callback: CallbackQuery):
             # Вычисляем диапазон пользователей для текущей страницы
             start_idx = (page - 1) * users_per_page
             end_idx = start_idx + users_per_page
-            page_users = users[start_idx:end_idx]
+            page_users = filtered_users[start_idx:end_idx]
             
             # Получаем количество ответов для всех пользователей на странице одним запросом
             async with async_session() as session:
@@ -258,13 +297,55 @@ async def admin_all_users(callback: CallbackQuery):
             keyboard_buttons = []
             nav_buttons = []
             
+            # Формируем callback_data с фильтрами
+            def build_callback(page_num):
+                return f"admin_all_users:{page_num}:{filter_premium}:{filter_free_report}"
+            
             if page > 1:
-                nav_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"admin_all_users:{page-1}"))
+                nav_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=build_callback(page-1)))
             if page < total_pages:
-                nav_buttons.append(InlineKeyboardButton(text="Вперед ▶️", callback_data=f"admin_all_users:{page+1}"))
+                nav_buttons.append(InlineKeyboardButton(text="Вперед ▶️", callback_data=build_callback(page+1)))
             
             if nav_buttons:
                 keyboard_buttons.append(nav_buttons)
+            
+            # Кнопки фильтрации
+            filter_buttons = []
+            
+            # Фильтр по премиум
+            premium_text = "💰 Премиум: "
+            if filter_premium == "all":
+                premium_text += "Все"
+            elif filter_premium == "yes":
+                premium_text += "Да ✓"
+            else:
+                premium_text += "Нет ✓"
+            filter_buttons.append(InlineKeyboardButton(
+                text=premium_text,
+                callback_data=f"admin_all_users:1:{'no' if filter_premium == 'yes' else 'yes' if filter_premium == 'no' else 'all'}:{filter_free_report}"
+            ))
+            
+            # Фильтр по бесплатному отчету
+            free_report_text = "📊 Бесп. отчет: "
+            if filter_free_report == "all":
+                free_report_text += "Все"
+            elif filter_free_report == "yes":
+                free_report_text += "Есть ✓"
+            else:
+                free_report_text += "Нет ✓"
+            filter_buttons.append(InlineKeyboardButton(
+                text=free_report_text,
+                callback_data=f"admin_all_users:1:{filter_premium}:{'no' if filter_free_report == 'yes' else 'yes' if filter_free_report == 'no' else 'all'}"
+            ))
+            
+            keyboard_buttons.append(filter_buttons)
+            
+            # Кнопка сброса фильтров (если есть активные фильтры)
+            if filter_premium != "all" or filter_free_report != "all":
+                keyboard_buttons.append([InlineKeyboardButton(
+                    text="🔄 Сбросить фильтры",
+                    callback_data="admin_all_users:1:all:all"
+                )])
             
             keyboard_buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")])
             
