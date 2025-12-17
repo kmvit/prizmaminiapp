@@ -1118,11 +1118,11 @@ async def robokassa_success(request: Request):
                 user = await db_service.get_user_by_id(payment.user_id)
                 if user:
                     logger.info(f"👤 Найден пользователь: ID={user.id}, telegram_id={user.telegram_id}, is_paid={user.is_paid}")
-                    await db_service.upgrade_to_paid(user.telegram_id)
+                    await db_service.upgrade_to_premium_and_continue_test(user.telegram_id)
                     logger.info(f"✅ Платеж {inv_id} обновлен до COMPLETED для пользователя {user.telegram_id}")
                     # Проверяем, что статус обновился
                     updated_user = await db_service.get_user_by_id(payment.user_id)
-                    logger.info(f"✅ Статус пользователя после обновления: is_paid={updated_user.is_paid}")
+                    logger.info(f"✅ Статус пользователя после обновления: is_paid={updated_user.is_paid}, is_premium_paid={updated_user.is_premium_paid}")
                 else:
                     logger.error(f"❌ Пользователь с ID {payment.user_id} не найден")
                 

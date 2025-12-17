@@ -175,6 +175,7 @@ class DatabaseService:
             
             # Обновляем статус на премиум
             user.is_paid = True
+            user.is_premium_paid = True  # Устанавливаем флаг покупки премиум отчета
             user.updated_at = datetime.utcnow()
             
             # Сбрасываем флаг завершения теста, чтобы пользователь мог продолжить
