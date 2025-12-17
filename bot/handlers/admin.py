@@ -235,6 +235,8 @@ async def admin_all_users(callback: CallbackQuery):
                         if user.last_name:
                             text += f" {user.last_name}"
                         text += ")"
+                    if user.username:
+                        text += f" @{user.username}"
                     text += "\n"
                     
                     # Дата регистрации
