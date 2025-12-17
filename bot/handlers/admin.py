@@ -230,6 +230,10 @@ async def admin_all_users(callback: CallbackQuery):
                             text += " (Премиум)"
                         text += "\n"
                     
+                    # Купил премиум
+                    premium_status = "Да" if user.is_premium_paid else "Нет"
+                    text += f"   💰 Купил премиум: {premium_status}\n"
+                    
                     # Количество ответов
                     text += f"   📝 Количество ответов: {answers_count}\n"
                     
