@@ -5,6 +5,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from bot.services.database_service import db_service
+from bot.config import ADMIN_IDS
 from bot.utils.logger import get_logger
 import os
 
@@ -40,15 +41,26 @@ async def cmd_start(message: Message):
         
         # Создаем кнопку для открытия Web App
         webapp_url = os.getenv("WEBAPP_URL", "")
+        keyboard_buttons = []
+        
         if webapp_url:
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+            keyboard_buttons.append([
                 InlineKeyboardButton(
                     text="🚀 Начать тест",
                     web_app={"url": f"{webapp_url.rstrip('/')}/index.html"}
                 )
-            ]])
-        else:
-            keyboard = None
+            ])
+        
+        # Добавляем кнопку "Админка" для администраторов
+        if chat_id in ADMIN_IDS:
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text="🔐 Админка",
+                    callback_data="admin_menu"
+                )
+            ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons) if keyboard_buttons else None
         
         # Отправляем сообщение через aiogram
         await message.answer(

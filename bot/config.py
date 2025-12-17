@@ -35,6 +35,9 @@ ROBOKASSA_TEST = os.getenv("ROBOKASSA_TEST", "1") == "1"
 # Настройки тестирования
 FREE_QUESTIONS_LIMIT = int(os.getenv("FREE_QUESTIONS_LIMIT", "10"))  # Количество бесплатных вопросов
 
+# Администраторы бота (список ID через запятую)
+ADMIN_IDS = [int(id.strip()) for id in os.getenv("ADMIN_IDS", "").split(",") if id.strip()]
+
 # Цены на премиум отчет
 PREMIUM_PRICE_ORIGINAL = float(os.getenv("PREMIUM_PRICE_ORIGINAL", "6980.00"))  # Полная цена премиум отчета
 PREMIUM_PRICE_DISCOUNT = float(os.getenv("PREMIUM_PRICE_DISCOUNT", "3590.00"))  # Цена со скидкой (спецпредложение)

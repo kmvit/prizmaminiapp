@@ -723,6 +723,96 @@ class DatabaseService:
                 await session.rollback()
                 logger.error(f"❌ Ошибка при сбросе зависших отчетов для пользователя {telegram_id}: {e}")
                 raise e
+    
+    # --- Методы для админки ---
+    
+    async def get_all_users(self) -> List[User]:
+        """Получить всех пользователей"""
+        async with async_session() as session:
+            stmt = select(User).order_by(User.created_at.desc())
+            result = await session.execute(stmt)
+            return result.scalars().all()
+    
+    async def get_free_reports_count(self) -> int:
+        """Получить количество запущенных бесплатных отчетов"""
+        async with async_session() as session:
+            stmt = select(User).where(
+                User.free_report_status.in_([
+                    ReportGenerationStatus.PROCESSING,
+                    ReportGenerationStatus.COMPLETED
+                ])
+            )
+            result = await session.execute(stmt)
+            users = result.scalars().all()
+            return len(users)
+    
+    async def get_premium_reports_count(self) -> int:
+        """Получить количество запущенных премиум отчетов"""
+        async with async_session() as session:
+            stmt = select(User).where(
+                User.premium_report_status.in_([
+                    ReportGenerationStatus.PROCESSING,
+                    ReportGenerationStatus.COMPLETED
+                ])
+            )
+            result = await session.execute(stmt)
+            users = result.scalars().all()
+            return len(users)
+    
+    async def get_all_report_links(self) -> List[dict]:
+        """Получить все ссылки на отчеты пользователей"""
+        async with async_session() as session:
+            stmt = select(User).where(
+                (User.free_report_path.isnot(None)) | (User.premium_report_path.isnot(None))
+            )
+            result = await session.execute(stmt)
+            users = result.scalars().all()
+            
+            links = []
+            for user in users:
+                if user.free_report_path:
+                    links.append({
+                        "telegram_id": user.telegram_id,
+                        "type": "free",
+                        "path": user.free_report_path,
+                        "status": user.free_report_status.value if user.free_report_status else None
+                    })
+                if user.premium_report_path:
+                    links.append({
+                        "telegram_id": user.telegram_id,
+                        "type": "premium",
+                        "path": user.premium_report_path,
+                        "status": user.premium_report_status.value if user.premium_report_status else None
+                    })
+            
+            return links
+    
+    async def get_users_answers_count(self) -> List[dict]:
+        """Получить количество ответов для каждого пользователя"""
+        async with async_session() as session:
+            # Получаем всех пользователей с их ответами
+            stmt = select(User).options(selectinload(User.answers))
+            result = await session.execute(stmt)
+            users = result.scalars().all()
+            
+            stats = []
+            for user in users:
+                answers_count = len(user.answers) if user.answers else 0
+                stats.append({
+                    "telegram_id": user.telegram_id,
+                    "answers_count": answers_count
+                })
+            
+            # Сортируем по количеству ответов (по убыванию)
+            stats.sort(key=lambda x: x["answers_count"], reverse=True)
+            return stats
+    
+    async def get_all_active_users(self) -> List[User]:
+        """Получить всех активных пользователей для рассылки"""
+        async with async_session() as session:
+            stmt = select(User).where(User.is_active == True)
+            result = await session.execute(stmt)
+            return result.scalars().all()
 
 # Создаем экземпляр сервиса
 db_service = DatabaseService() 
