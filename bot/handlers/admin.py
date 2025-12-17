@@ -349,40 +349,76 @@ async def admin_all_users(callback: CallbackQuery):
                 keyboard_buttons.append(nav_buttons)
             
             # Кнопки фильтрации
-            filter_buttons = []
+            filter_buttons_row1 = []
+            filter_buttons_row2 = []
             
-            # Фильтр по премиум
-            premium_text = "💰 Премиум: "
+            # Фильтр по премиум - отдельные кнопки для каждого состояния
             if filter_premium == "all":
-                premium_text += "Все"
+                filter_buttons_row1.append(InlineKeyboardButton(
+                    text="💰 Только премиум",
+                    callback_data=f"admin_all_users:1:yes:{filter_free_report}"
+                ))
+                filter_buttons_row1.append(InlineKeyboardButton(
+                    text="💰 Без премиум",
+                    callback_data=f"admin_all_users:1:no:{filter_free_report}"
+                ))
             elif filter_premium == "yes":
-                premium_text += "Да ✓"
-            else:
-                premium_text += "Нет ✓"
-            filter_buttons.append(InlineKeyboardButton(
-                text=premium_text,
-                callback_data=f"admin_all_users:1:{'no' if filter_premium == 'yes' else 'yes' if filter_premium == 'no' else 'all'}:{filter_free_report}"
-            ))
+                filter_buttons_row1.append(InlineKeyboardButton(
+                    text="💰 Премиум ✓",
+                    callback_data=f"admin_all_users:1:yes:{filter_free_report}"
+                ))
+                filter_buttons_row1.append(InlineKeyboardButton(
+                    text="💰 Без премиум",
+                    callback_data=f"admin_all_users:1:no:{filter_free_report}"
+                ))
+            else:  # filter_premium == "no"
+                filter_buttons_row1.append(InlineKeyboardButton(
+                    text="💰 Только премиум",
+                    callback_data=f"admin_all_users:1:yes:{filter_free_report}"
+                ))
+                filter_buttons_row1.append(InlineKeyboardButton(
+                    text="💰 Без премиум ✓",
+                    callback_data=f"admin_all_users:1:no:{filter_free_report}"
+                ))
             
             # Фильтр по бесплатному отчету
-            free_report_text = "📊 Бесп. отчет: "
             if filter_free_report == "all":
-                free_report_text += "Все"
+                filter_buttons_row2.append(InlineKeyboardButton(
+                    text="📊 С бесп. отчетом",
+                    callback_data=f"admin_all_users:1:{filter_premium}:yes"
+                ))
+                filter_buttons_row2.append(InlineKeyboardButton(
+                    text="📊 Без бесп. отчета",
+                    callback_data=f"admin_all_users:1:{filter_premium}:no"
+                ))
             elif filter_free_report == "yes":
-                free_report_text += "Есть ✓"
-            else:
-                free_report_text += "Нет ✓"
-            filter_buttons.append(InlineKeyboardButton(
-                text=free_report_text,
-                callback_data=f"admin_all_users:1:{filter_premium}:{'no' if filter_free_report == 'yes' else 'yes' if filter_free_report == 'no' else 'all'}"
-            ))
+                filter_buttons_row2.append(InlineKeyboardButton(
+                    text="📊 С бесп. отчетом ✓",
+                    callback_data=f"admin_all_users:1:{filter_premium}:yes"
+                ))
+                filter_buttons_row2.append(InlineKeyboardButton(
+                    text="📊 Без бесп. отчета",
+                    callback_data=f"admin_all_users:1:{filter_premium}:no"
+                ))
+            else:  # filter_free_report == "no"
+                filter_buttons_row2.append(InlineKeyboardButton(
+                    text="📊 С бесп. отчетом",
+                    callback_data=f"admin_all_users:1:{filter_premium}:yes"
+                ))
+                filter_buttons_row2.append(InlineKeyboardButton(
+                    text="📊 Без бесп. отчета ✓",
+                    callback_data=f"admin_all_users:1:{filter_premium}:no"
+                ))
             
-            keyboard_buttons.append(filter_buttons)
+            if filter_buttons_row1:
+                keyboard_buttons.append(filter_buttons_row1)
+            if filter_buttons_row2:
+                keyboard_buttons.append(filter_buttons_row2)
             
             # Кнопка сброса фильтров (если есть активные фильтры)
             if filter_premium != "all" or filter_free_report != "all":
                 keyboard_buttons.append([InlineKeyboardButton(
-                    text="🔄 Сбросить фильтры",
+                    text="🔄 Показать всех",
                     callback_data="admin_all_users:1:all:all"
                 )])
             
