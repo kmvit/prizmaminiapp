@@ -103,20 +103,33 @@ async def admin_menu(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_all_users")
+@router.callback_query(F.data.startswith("admin_all_users"))
 async def admin_all_users(callback: CallbackQuery):
-    """Показать всех пользователей"""
+    """Показать всех пользователей с пагинацией"""
     if not is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет доступа", show_alert=True)
         return
     
     try:
+        # Получаем номер страницы из callback_data
+        page = 1
+        if ":" in callback.data:
+            try:
+                page = int(callback.data.split(":")[1])
+            except:
+                page = 1
+        
         users = await db_service.get_all_users()
+        users_per_page = 8  # Меньше пользователей на страницу из-за подробной информации
+        total_pages = (len(users) + users_per_page - 1) // users_per_page if users else 1
         
         if not users:
             text = "👥 <b>Пользователи</b>\n\nПользователей пока нет."
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
+            ])
         else:
-            text = f"👥 <b>Все пользователи</b>\n\nВсего: {len(users)}\n\n"
+            text = f"👥 <b>Все пользователи</b>\n\nВсего: {len(users)} | Страница {page}/{total_pages}\n\n"
             
             # Функция для форматирования даты
             def format_date(dt):
@@ -149,8 +162,13 @@ async def admin_all_users(callback: CallbackQuery):
                 except:
                     return "—"
             
-            # Показываем первые 30 пользователей (из-за лимита Telegram и добавления информации)
-            for i, user in enumerate(users[:30], 1):
+            # Вычисляем диапазон пользователей для текущей страницы
+            start_idx = (page - 1) * users_per_page
+            end_idx = start_idx + users_per_page
+            page_users = users[start_idx:end_idx]
+            
+            # Показываем пользователей текущей страницы
+            for i, user in enumerate(page_users, start=start_idx + 1):
                 text += f"<b>{i}. ID: <code>{user.telegram_id}</code></b>"
                 if user.first_name:
                     text += f" ({user.first_name}"
@@ -193,12 +211,21 @@ async def admin_all_users(callback: CallbackQuery):
                 
                 text += "\n"
             
-            if len(users) > 30:
-                text += f"\n... и еще {len(users) - 30} пользователей"
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
-        ])
+            # Кнопки пагинации
+            keyboard_buttons = []
+            nav_buttons = []
+            
+            if page > 1:
+                nav_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"admin_all_users:{page-1}"))
+            if page < total_pages:
+                nav_buttons.append(InlineKeyboardButton(text="Вперед ▶️", callback_data=f"admin_all_users:{page+1}"))
+            
+            if nav_buttons:
+                keyboard_buttons.append(nav_buttons)
+            
+            keyboard_buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")])
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
         await callback.message.edit_text(
             text,
@@ -209,6 +236,8 @@ async def admin_all_users(callback: CallbackQuery):
         
     except Exception as e:
         logger.error(f"❌ Ошибка при получении списка пользователей: {e}")
+        import traceback
+        logger.error(f"📋 Traceback: {traceback.format_exc()}")
         await callback.answer("❌ Ошибка при получении данных", show_alert=True)
 
 
