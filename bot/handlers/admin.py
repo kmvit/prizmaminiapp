@@ -131,13 +131,31 @@ async def admin_all_users(callback: CallbackQuery):
         
         users = await db_service.get_all_users()
         
+        # Получаем информацию о платежах для определения премиум пользователей
+        async with async_session() as session:
+            from bot.database.models import Payment, PaymentStatus
+            payments_stmt = (
+                select(Payment.user_id)
+                .where(Payment.status == PaymentStatus.COMPLETED)
+                .distinct()
+            )
+            payments_result = await session.execute(payments_stmt)
+            users_with_payments = {row.user_id for row in payments_result.all()}
+        
         # Применяем фильтры
         filtered_users = []
         for user in users:
+            # Определяем, купил ли пользователь премиум (проверяем несколько признаков)
+            has_premium = (
+                user.is_premium_paid or  # Новый способ
+                (user.is_paid and user.id in users_with_payments) or  # Старый способ - есть оплата
+                bool(user.premium_report_path)  # Есть премиум отчет
+            )
+            
             # Фильтр по премиум
-            if filter_premium == "yes" and not user.is_premium_paid:
+            if filter_premium == "yes" and not has_premium:
                 continue
-            if filter_premium == "no" and user.is_premium_paid:
+            if filter_premium == "no" and has_premium:
                 continue
             
             # Фильтр по бесплатному отчету
@@ -207,9 +225,9 @@ async def admin_all_users(callback: CallbackQuery):
             end_idx = start_idx + users_per_page
             page_users = filtered_users[start_idx:end_idx]
             
-            # Получаем количество ответов для всех пользователей на странице одним запросом
+            # Получаем количество ответов и информацию о платежах для всех пользователей на странице
             async with async_session() as session:
-                from bot.database.models import Answer
+                from bot.database.models import Answer, Payment, PaymentStatus
                 from sqlalchemy import func
                 
                 # Получаем ID пользователей на странице
@@ -224,10 +242,29 @@ async def admin_all_users(callback: CallbackQuery):
                 answers_count_result = await session.execute(answers_count_stmt)
                 answers_counts = {row.user_id: row.count for row in answers_count_result.all()}
                 
+                # Получаем информацию о завершенных платежах для определения премиум пользователей
+                payments_stmt = (
+                    select(Payment.user_id)
+                    .where(
+                        Payment.user_id.in_(user_ids),
+                        Payment.status == PaymentStatus.COMPLETED
+                    )
+                    .distinct()
+                )
+                payments_result = await session.execute(payments_stmt)
+                users_with_payments = {row.user_id for row in payments_result.all()}
+                
                 # Показываем пользователей текущей страницы
                 for i, user in enumerate(page_users, start=start_idx + 1):
                     # Получаем количество ответов пользователя
                     answers_count = answers_counts.get(user.id, 0)
+                    
+                    # Определяем, купил ли пользователь премиум (проверяем несколько признаков)
+                    has_premium = (
+                        user.is_premium_paid or  # Новый способ
+                        (user.is_paid and user.id in users_with_payments) or  # Старый способ - есть оплата
+                        bool(user.premium_report_path)  # Есть премиум отчет
+                    )
                     
                     text += f"<b>{i}. ID: <code>{user.telegram_id}</code></b>"
                     if user.first_name:
@@ -271,8 +308,8 @@ async def admin_all_users(callback: CallbackQuery):
                             text += " (Премиум)"
                         text += "\n"
                     
-                    # Купил премиум
-                    premium_status = "Да" if user.is_premium_paid else "Нет"
+                    # Купил премиум (используем вычисленное значение)
+                    premium_status = "Да" if has_premium else "Нет"
                     text += f"   💰 Купил премиум: {premium_status}\n"
                     
                     # Количество ответов
