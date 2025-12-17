@@ -351,18 +351,32 @@ async def admin_all_users(callback: CallbackQuery):
             
             keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
-        await callback.message.edit_text(
-            text,
-            reply_markup=keyboard,
-            parse_mode="HTML"
-        )
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        except Exception as edit_error:
+            # Если сообщение не изменилось (пользователь нажал на тот же фильтр), просто отвечаем
+            error_msg = str(edit_error)
+            if "message is not modified" in error_msg.lower():
+                await callback.answer("ℹ️ Фильтр уже активен", show_alert=False)
+                return
+            else:
+                # Если другая ошибка, пробрасываем дальше
+                raise
+        
         await callback.answer()
         
     except Exception as e:
         logger.error(f"❌ Ошибка при получении списка пользователей: {e}")
         import traceback
         logger.error(f"📋 Traceback: {traceback.format_exc()}")
-        await callback.answer("❌ Ошибка при получении данных", show_alert=True)
+        try:
+            await callback.answer("❌ Ошибка при получении данных", show_alert=True)
+        except:
+            pass
 
 
 @router.callback_query(F.data.startswith("admin_free_reports"))
