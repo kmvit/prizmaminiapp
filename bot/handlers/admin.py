@@ -120,8 +120,9 @@ async def admin_all_users(callback: CallbackQuery):
                 page = 1
         
         users = await db_service.get_all_users()
-        users_per_page = 8  # Меньше пользователей на страницу из-за подробной информации
+        users_per_page = 5  # Меньше пользователей на страницу из-за подробной информации
         total_pages = (len(users) + users_per_page - 1) // users_per_page if users else 1
+        webapp_url = os.getenv("WEBAPP_URL", "").rstrip("/")
         
         if not users:
             text = "👥 <b>Пользователи</b>\n\nПользователей пока нет."
@@ -167,49 +168,87 @@ async def admin_all_users(callback: CallbackQuery):
             end_idx = start_idx + users_per_page
             page_users = users[start_idx:end_idx]
             
-            # Показываем пользователей текущей страницы
-            for i, user in enumerate(page_users, start=start_idx + 1):
-                text += f"<b>{i}. ID: <code>{user.telegram_id}</code></b>"
-                if user.first_name:
-                    text += f" ({user.first_name}"
-                    if user.last_name:
-                        text += f" {user.last_name}"
-                    text += ")"
-                text += "\n"
+            # Получаем количество ответов для всех пользователей на странице одним запросом
+            async with async_session() as session:
+                from bot.database.models import Answer
+                from sqlalchemy import func
                 
-                # Дата регистрации
-                reg_date = format_date(user.created_at)
-                text += f"   📅 Регистрация: {reg_date}"
-                if user.created_at:
-                    text += f" ({format_relative_time(user.created_at)})"
-                text += "\n"
+                # Получаем ID пользователей на странице
+                user_ids = [user.id for user in page_users]
                 
-                # Последняя активность (updated_at)
-                last_active = format_date(user.updated_at)
-                text += f"   🔄 Последняя активность: {last_active}"
-                if user.updated_at:
-                    text += f" ({format_relative_time(user.updated_at)})"
-                text += "\n"
+                # Получаем количество ответов для всех пользователей одним запросом
+                answers_count_stmt = (
+                    select(Answer.user_id, func.count(Answer.id).label('count'))
+                    .where(Answer.user_id.in_(user_ids))
+                    .group_by(Answer.user_id)
+                )
+                answers_count_result = await session.execute(answers_count_stmt)
+                answers_counts = {row.user_id: row.count for row in answers_count_result.all()}
                 
-                # Статус теста
-                if user.test_started_at:
-                    test_start = format_date(user.test_started_at)
-                    text += f"   🧪 Тест начат: {test_start}"
-                    if user.test_completed_at:
-                        test_end = format_date(user.test_completed_at)
-                        text += f" | Завершен: {test_end}"
-                    else:
-                        text += " | В процессе"
+                # Показываем пользователей текущей страницы
+                for i, user in enumerate(page_users, start=start_idx + 1):
+                    # Получаем количество ответов пользователя
+                    answers_count = answers_counts.get(user.id, 0)
+                    
+                    text += f"<b>{i}. ID: <code>{user.telegram_id}</code></b>"
+                    if user.first_name:
+                        text += f" ({user.first_name}"
+                        if user.last_name:
+                            text += f" {user.last_name}"
+                        text += ")"
                     text += "\n"
-                
-                # Статус оплаты
-                if user.is_paid or user.is_premium_paid:
-                    text += "   💎 Платный пользователь"
-                    if user.is_premium_paid:
-                        text += " (Премиум)"
+                    
+                    # Дата регистрации
+                    reg_date = format_date(user.created_at)
+                    text += f"   📅 Регистрация: {reg_date}"
+                    if user.created_at:
+                        text += f" ({format_relative_time(user.created_at)})"
                     text += "\n"
-                
-                text += "\n"
+                    
+                    # Последняя активность (updated_at)
+                    last_active = format_date(user.updated_at)
+                    text += f"   🔄 Последняя активность: {last_active}"
+                    if user.updated_at:
+                        text += f" ({format_relative_time(user.updated_at)})"
+                    text += "\n"
+                    
+                    # Статус теста
+                    if user.test_started_at:
+                        test_start = format_date(user.test_started_at)
+                        text += f"   🧪 Тест начат: {test_start}"
+                        if user.test_completed_at:
+                            test_end = format_date(user.test_completed_at)
+                            text += f" | Завершен: {test_end}"
+                        else:
+                            text += " | В процессе"
+                        text += "\n"
+                    
+                    # Статус оплаты
+                    if user.is_paid or user.is_premium_paid:
+                        text += "   💎 Платный пользователь"
+                        if user.is_premium_paid:
+                            text += " (Премиум)"
+                        text += "\n"
+                    
+                    # Количество ответов
+                    text += f"   📝 Количество ответов: {answers_count}\n"
+                    
+                    # Ссылки на отчеты
+                    if user.free_report_path:
+                        if webapp_url:
+                            free_report_url = f"{webapp_url}/api/download/report/{user.telegram_id}?download=1"
+                            text += f"   📊 Бесплатный отчет: <code>{free_report_url}</code>\n"
+                        else:
+                            text += f"   📊 Бесплатный отчет: {user.free_report_path}\n"
+                    
+                    if user.premium_report_path:
+                        if webapp_url:
+                            premium_report_url = f"{webapp_url}/api/download/premium-report/{user.telegram_id}?download=1"
+                            text += f"   💎 Платный отчет: <code>{premium_report_url}</code>\n"
+                        else:
+                            text += f"   💎 Платный отчет: {user.premium_report_path}\n"
+                    
+                    text += "\n"
             
             # Кнопки пагинации
             keyboard_buttons = []
@@ -241,7 +280,7 @@ async def admin_all_users(callback: CallbackQuery):
         await callback.answer("❌ Ошибка при получении данных", show_alert=True)
 
 
-@router.callback_query(F.data == "admin_free_reports")
+@router.callback_query(F.data.startswith("admin_free_reports"))
 async def admin_free_reports(callback: CallbackQuery):
     """Показать статистику бесплатных отчетов"""
     if not is_admin(callback.from_user.id):
@@ -249,6 +288,14 @@ async def admin_free_reports(callback: CallbackQuery):
         return
     
     try:
+        # Получаем номер страницы из callback_data
+        page = 1
+        if ":" in callback.data:
+            try:
+                page = int(callback.data.split(":")[1])
+            except:
+                page = 1
+        
         count = await db_service.get_free_reports_count()
         
         # Получаем детальную информацию
@@ -265,6 +312,10 @@ async def admin_free_reports(callback: CallbackQuery):
             processing = sum(1 for u in users if u.free_report_status == ReportGenerationStatus.PROCESSING)
             completed = sum(1 for u in users if u.free_report_status == ReportGenerationStatus.COMPLETED)
         
+        # Группируем по статусу
+        processing_users = [u for u in users if u.free_report_status == ReportGenerationStatus.PROCESSING]
+        completed_users = [u for u in users if u.free_report_status == ReportGenerationStatus.COMPLETED]
+        
         text = f"""
 📊 <b>Бесплатные отчеты</b>
 
@@ -275,30 +326,55 @@ async def admin_free_reports(callback: CallbackQuery):
 <b>Пользователи:</b>
         """.strip()
         
-        if users:
-            # Группируем по статусу
-            processing_users = [u for u in users if u.free_report_status == ReportGenerationStatus.PROCESSING]
-            completed_users = [u for u in users if u.free_report_status == ReportGenerationStatus.COMPLETED]
+        users_per_page = 20  # Уменьшаем из-за добавления даты
+        keyboard_buttons = []
+        
+        # Функция для форматирования даты
+        def format_date(dt):
+            if not dt:
+                return "—"
+            try:
+                return dt.strftime("%d.%m.%Y %H:%M")
+            except:
+                return "—"
+        
+        if processing_users:
+            text += "\n\n<b>В обработке:</b>"
+            for i, user in enumerate(processing_users, 1):
+                text += f"\n{i}. ID: <code>{user.telegram_id}</code>"
+        
+        if completed_users:
+            # Пагинация для завершенных пользователей
+            total_pages = (len(completed_users) + users_per_page - 1) // users_per_page
+            start_idx = (page - 1) * users_per_page
+            end_idx = start_idx + users_per_page
+            page_users = completed_users[start_idx:end_idx]
             
-            if processing_users:
-                text += "\n\n<b>В обработке:</b>"
-                for i, user in enumerate(processing_users[:30], 1):
-                    text += f"\n{i}. ID: <code>{user.telegram_id}</code>"
-                if len(processing_users) > 30:
-                    text += f"\n... и еще {len(processing_users) - 30} пользователей"
+            text += f"\n\n<b>Завершено ({len(completed_users)}):</b>"
+            if total_pages > 1:
+                text += f" Страница {page}/{total_pages}"
+            text += "\n"
             
-            if completed_users:
-                text += "\n\n<b>Завершено:</b>"
-                for i, user in enumerate(completed_users[:30], 1):
-                    text += f"\n{i}. ID: <code>{user.telegram_id}</code>"
-                if len(completed_users) > 30:
-                    text += f"\n... и еще {len(completed_users) - 30} пользователей"
-        else:
+            for i, user in enumerate(page_users, start=start_idx + 1):
+                completed_date = format_date(user.report_generation_completed_at)
+                text += f"{i}. ID: <code>{user.telegram_id}</code> | 📅 {completed_date}\n"
+            
+            # Кнопки пагинации
+            if total_pages > 1:
+                nav_buttons = []
+                if page > 1:
+                    nav_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"admin_free_reports:{page-1}"))
+                if page < total_pages:
+                    nav_buttons.append(InlineKeyboardButton(text="Вперед ▶️", callback_data=f"admin_free_reports:{page+1}"))
+                if nav_buttons:
+                    keyboard_buttons.append(nav_buttons)
+        
+        if not users:
             text += "\n\nПользователей пока нет."
         
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
-        ])
+        keyboard_buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
         await callback.message.edit_text(
             text,
@@ -312,14 +388,22 @@ async def admin_free_reports(callback: CallbackQuery):
         await callback.answer("❌ Ошибка при получении данных", show_alert=True)
 
 
-@router.callback_query(F.data == "admin_premium_reports")
+@router.callback_query(F.data.startswith("admin_premium_reports"))
 async def admin_premium_reports(callback: CallbackQuery):
-    """Показать статистику премиум отчетов"""
+    """Показать статистику премиум отчетов с пагинацией"""
     if not is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет доступа", show_alert=True)
         return
     
     try:
+        # Получаем номер страницы из callback_data
+        page = 1
+        if ":" in callback.data:
+            try:
+                page = int(callback.data.split(":")[1])
+            except:
+                page = 1
+        
         count = await db_service.get_premium_reports_count()
         
         # Получаем детальную информацию
@@ -336,6 +420,10 @@ async def admin_premium_reports(callback: CallbackQuery):
             processing = sum(1 for u in users if u.premium_report_status == ReportGenerationStatus.PROCESSING)
             completed = sum(1 for u in users if u.premium_report_status == ReportGenerationStatus.COMPLETED)
         
+        # Группируем по статусу
+        processing_users = [u for u in users if u.premium_report_status == ReportGenerationStatus.PROCESSING]
+        completed_users = [u for u in users if u.premium_report_status == ReportGenerationStatus.COMPLETED]
+        
         text = f"""
 💎 <b>Премиум отчеты</b>
 
@@ -346,30 +434,55 @@ async def admin_premium_reports(callback: CallbackQuery):
 <b>Пользователи:</b>
         """.strip()
         
-        if users:
-            # Группируем по статусу
-            processing_users = [u for u in users if u.premium_report_status == ReportGenerationStatus.PROCESSING]
-            completed_users = [u for u in users if u.premium_report_status == ReportGenerationStatus.COMPLETED]
+        users_per_page = 20
+        keyboard_buttons = []
+        
+        # Функция для форматирования даты
+        def format_date(dt):
+            if not dt:
+                return "—"
+            try:
+                return dt.strftime("%d.%m.%Y %H:%M")
+            except:
+                return "—"
+        
+        if processing_users:
+            text += "\n\n<b>В обработке:</b>"
+            for i, user in enumerate(processing_users, 1):
+                text += f"\n{i}. ID: <code>{user.telegram_id}</code>"
+        
+        if completed_users:
+            # Пагинация для завершенных пользователей
+            total_pages = (len(completed_users) + users_per_page - 1) // users_per_page
+            start_idx = (page - 1) * users_per_page
+            end_idx = start_idx + users_per_page
+            page_users = completed_users[start_idx:end_idx]
             
-            if processing_users:
-                text += "\n\n<b>В обработке:</b>"
-                for i, user in enumerate(processing_users[:30], 1):
-                    text += f"\n{i}. ID: <code>{user.telegram_id}</code>"
-                if len(processing_users) > 30:
-                    text += f"\n... и еще {len(processing_users) - 30} пользователей"
+            text += f"\n\n<b>Завершено ({len(completed_users)}):</b>"
+            if total_pages > 1:
+                text += f" Страница {page}/{total_pages}"
+            text += "\n"
             
-            if completed_users:
-                text += "\n\n<b>Завершено:</b>"
-                for i, user in enumerate(completed_users[:30], 1):
-                    text += f"\n{i}. ID: <code>{user.telegram_id}</code>"
-                if len(completed_users) > 30:
-                    text += f"\n... и еще {len(completed_users) - 30} пользователей"
-        else:
+            for i, user in enumerate(page_users, start=start_idx + 1):
+                completed_date = format_date(user.report_generation_completed_at)
+                text += f"{i}. ID: <code>{user.telegram_id}</code> | 📅 {completed_date}\n"
+            
+            # Кнопки пагинации
+            if total_pages > 1:
+                nav_buttons = []
+                if page > 1:
+                    nav_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"admin_premium_reports:{page-1}"))
+                if page < total_pages:
+                    nav_buttons.append(InlineKeyboardButton(text="Вперед ▶️", callback_data=f"admin_premium_reports:{page+1}"))
+                if nav_buttons:
+                    keyboard_buttons.append(nav_buttons)
+        
+        if not users:
             text += "\n\nПользователей пока нет."
         
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
-        ])
+        keyboard_buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
         await callback.message.edit_text(
             text,
@@ -380,25 +493,36 @@ async def admin_premium_reports(callback: CallbackQuery):
         
     except Exception as e:
         logger.error(f"❌ Ошибка при получении статистики премиум отчетов: {e}")
+        import traceback
+        logger.error(f"📋 Traceback: {traceback.format_exc()}")
         await callback.answer("❌ Ошибка при получении данных", show_alert=True)
 
 
-@router.callback_query(F.data == "admin_report_links")
+@router.callback_query(F.data.startswith("admin_report_links"))
 async def admin_report_links(callback: CallbackQuery):
-    """Показать все ссылки на отчеты"""
+    """Показать все ссылки на отчеты с пагинацией"""
     if not is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет доступа", show_alert=True)
         return
     
     try:
+        # Получаем номер страницы из callback_data
+        page = 1
+        if ":" in callback.data:
+            try:
+                page = int(callback.data.split(":")[1])
+            except:
+                page = 1
+        
         links = await db_service.get_all_report_links()
         webapp_url = os.getenv("WEBAPP_URL", "").rstrip("/")
         
         if not links:
             text = "🔗 <b>Ссылки на отчеты</b>\n\nОтчетов пока нет."
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
+            ])
         else:
-            text = f"🔗 <b>Все ссылки на отчеты</b>\n\nВсего: {len(links)}\n\n"
-            
             # Группируем по пользователям
             user_links = {}
             for link in links:
@@ -407,9 +531,19 @@ async def admin_report_links(callback: CallbackQuery):
                     user_links[user_id] = []
                 user_links[user_id].append(link)
             
-            # Показываем первые 20 пользователей
-            for i, (user_id, user_link_list) in enumerate(list(user_links.items())[:20], 1):
-                text += f"<b>Пользователь {user_id}:</b>\n"
+            users_per_page = 10
+            total_pages = (len(user_links) + users_per_page - 1) // users_per_page
+            start_idx = (page - 1) * users_per_page
+            end_idx = start_idx + users_per_page
+            page_user_links = list(user_links.items())[start_idx:end_idx]
+            
+            text = f"🔗 <b>Все ссылки на отчеты</b>\n\nВсего: {len(links)} | Пользователей: {len(user_links)}"
+            if total_pages > 1:
+                text += f" | Страница {page}/{total_pages}"
+            text += "\n\n"
+            
+            for i, (user_id, user_link_list) in enumerate(page_user_links, start=start_idx + 1):
+                text += f"<b>{i}. Пользователь {user_id}:</b>\n"
                 for link in user_link_list:
                     report_type = "Бесплатный" if link["type"] == "free" else "Премиум"
                     status = link["status"] or "N/A"
@@ -425,12 +559,19 @@ async def admin_report_links(callback: CallbackQuery):
                         text += f"  • {report_type} ({status}): {link['path']}\n"
                 text += "\n"
             
-            if len(user_links) > 20:
-                text += f"\n... и еще {len(user_links) - 20} пользователей с отчетами"
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
-        ])
+            # Кнопки пагинации
+            keyboard_buttons = []
+            if total_pages > 1:
+                nav_buttons = []
+                if page > 1:
+                    nav_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"admin_report_links:{page-1}"))
+                if page < total_pages:
+                    nav_buttons.append(InlineKeyboardButton(text="Вперед ▶️", callback_data=f"admin_report_links:{page+1}"))
+                if nav_buttons:
+                    keyboard_buttons.append(nav_buttons)
+            
+            keyboard_buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
         await callback.message.edit_text(
             text,
@@ -446,31 +587,57 @@ async def admin_report_links(callback: CallbackQuery):
         await callback.answer("❌ Ошибка при получении данных", show_alert=True)
 
 
-@router.callback_query(F.data == "admin_answers")
+@router.callback_query(F.data.startswith("admin_answers"))
 async def admin_answers(callback: CallbackQuery):
-    """Показать статистику ответов пользователей"""
+    """Показать статистику ответов пользователей с пагинацией"""
     if not is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет доступа", show_alert=True)
         return
     
     try:
+        # Получаем номер страницы из callback_data
+        page = 1
+        if ":" in callback.data:
+            try:
+                page = int(callback.data.split(":")[1])
+            except:
+                page = 1
+        
         stats = await db_service.get_users_answers_count()
         
         if not stats:
             text = "📝 <b>Ответы пользователей</b>\n\nОтветов пока нет."
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
+            ])
         else:
-            text = f"📝 <b>Ответы пользователей</b>\n\nВсего пользователей с ответами: {len(stats)}\n\n"
+            users_per_page = 30
+            total_pages = (len(stats) + users_per_page - 1) // users_per_page
+            start_idx = (page - 1) * users_per_page
+            end_idx = start_idx + users_per_page
+            page_stats = stats[start_idx:end_idx]
             
-            # Показываем топ 30 пользователей
-            for i, stat in enumerate(stats[:30], 1):
+            text = f"📝 <b>Ответы пользователей</b>\n\nВсего пользователей с ответами: {len(stats)}"
+            if total_pages > 1:
+                text += f" | Страница {page}/{total_pages}"
+            text += "\n\n"
+            
+            for i, stat in enumerate(page_stats, start=start_idx + 1):
                 text += f"{i}. ID: <code>{stat['telegram_id']}</code> - {stat['answers_count']} ответов\n"
             
-            if len(stats) > 30:
-                text += f"\n... и еще {len(stats) - 30} пользователей"
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
-        ])
+            # Кнопки пагинации
+            keyboard_buttons = []
+            if total_pages > 1:
+                nav_buttons = []
+                if page > 1:
+                    nav_buttons.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"admin_answers:{page-1}"))
+                if page < total_pages:
+                    nav_buttons.append(InlineKeyboardButton(text="Вперед ▶️", callback_data=f"admin_answers:{page+1}"))
+                if nav_buttons:
+                    keyboard_buttons.append(nav_buttons)
+            
+            keyboard_buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
         await callback.message.edit_text(
             text,
@@ -481,6 +648,8 @@ async def admin_answers(callback: CallbackQuery):
         
     except Exception as e:
         logger.error(f"❌ Ошибка при получении статистики ответов: {e}")
+        import traceback
+        logger.error(f"📋 Traceback: {traceback.format_exc()}")
         await callback.answer("❌ Ошибка при получении данных", show_alert=True)
 
 
