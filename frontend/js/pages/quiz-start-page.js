@@ -69,6 +69,18 @@ const QuizStartPage = {
         $('#nameInput, #ageInput').on('input', () => {
             this.validateForm();
         });
+        
+        // Обработка кнопки оплаты для активного предложения (со скидкой)
+        $('#buyDiscountButton').off('click').on('click', async (e) => {
+            e.preventDefault();
+            await this.handlePayment(e.currentTarget);
+        });
+        
+        // Обработка кнопки оплаты для истекшего предложения (полная цена)
+        $('#buyRegularButton').off('click').on('click', async (e) => {
+            e.preventDefault();
+            await this.handlePayment(e.currentTarget);
+        });
     },
 
     /**
@@ -168,60 +180,239 @@ const QuizStartPage = {
      */
     async initTimer() {
         try {
+            console.log('⏰ Запуск таймера спецпредложения');
+            
             const telegramId = window.TelegramWebApp?.getUserId();
-            if (!telegramId) return;
+            if (!telegramId) {
+                console.log('ℹ️ Telegram ID не найден, таймер не запущен');
+                return;
+            }
+
+            // Получаем информацию о таймере с сервера
+            const timerData = await ApiClient.getSpecialOfferTimer(telegramId);
             
-            // Получаем информацию о таймере
-            const profile = await ApiClient.getUserProfile(telegramId);
-            
-            if (profile && profile.user && profile.user.special_offer_started_at) {
-                const startTime = new Date(profile.user.special_offer_started_at);
-                const now = new Date();
-                const elapsed = Math.floor((now - startTime) / 1000); // секунды
-                const duration = 12 * 60 * 60; // 12 часов в секундах
-                const remaining = duration - elapsed;
-                
-                if (remaining > 0) {
-                    this.startCountdown(remaining);
-                } else {
-                    this.showExpiredOffer();
-                }
+            if (timerData.status === 'success' && timerData.timer) {
+                // Обновляем таймер и цену
+                this.updateTimerDisplay(timerData.timer, timerData.pricing);
+                this.startCountdown(timerData.timer.remaining_seconds);
+            } else {
+                console.error('❌ Ошибка получения таймера:', timerData);
+                // Показываем статичное время в случае ошибки
+                this.updateTimerDisplay({ time_string: '23:59:59', is_expired: false });
             }
         } catch (error) {
-            console.log('ℹ️ Таймер еще не запущен');
+            console.error('❌ Ошибка запуска таймера:', error);
+            // Показываем статичное время в случае ошибки
+            this.updateTimerDisplay({ time_string: '23:59:59', is_expired: false });
         }
+    },
+
+    /**
+     * Обновление отображения таймера и цены
+     */
+    updateTimerDisplay(timer, pricing = null) {
+        const timeElement = document.querySelector('.decoding-offer-time');
+        const timeElementExpired = document.getElementById('timerDisplayExpired');
+        
+        if (timeElement) {
+            timeElement.textContent = timer.time_string;
+            
+            // Если время истекло, показываем 00:00:00 и переключаем блоки
+            if (timer.is_expired) {
+                timeElement.textContent = '00:00:00';
+                timeElement.style.color = '#ff4444'; // Красный цвет для истекшего времени
+                
+                // Обновляем таймер в блоке истекшего предложения
+                if (timeElementExpired) {
+                    timeElementExpired.textContent = '00:00:00';
+                    timeElementExpired.style.color = '#ff4444';
+                }
+                
+                // Показываем блок с истекшим предложением
+                const promoActive = document.getElementById('promoActive');
+                const promoExpired = document.getElementById('promoExpired');
+                if (promoActive && promoExpired) {
+                    promoActive.style.display = 'none';
+                    promoExpired.style.display = 'block';
+                }
+            } else {
+                timeElement.style.color = ''; // Возвращаем обычный цвет
+                
+                // Показываем блок с активным предложением
+                const promoActive = document.getElementById('promoActive');
+                const promoExpired = document.getElementById('promoExpired');
+                if (promoActive && promoExpired) {
+                    promoActive.style.display = 'block';
+                    promoExpired.style.display = 'none';
+                }
+            }
+        }
+        
+        // Обновляем цену, если передана информация о ценообразовании
+        if (pricing) {
+            this.updatePricingDisplay(pricing);
+        }
+    },
+
+    /**
+     * Обновление отображения цены
+     */
+    updatePricingDisplay(pricing) {
+        // Обновляем цену в обоих блоках (активном и истекшем)
+        const currentPriceElements = document.querySelectorAll('.decoding-offer-button-current-price');
+        const oldPriceElements = document.querySelectorAll('.decoding-offer-button-old-price');
+        
+        // Обновляем все элементы с текущей ценой
+        currentPriceElements.forEach(element => {
+            element.textContent = `${pricing.current_price.toLocaleString()}р`;
+        });
+        
+        // Обновляем все элементы со старой ценой
+        oldPriceElements.forEach(element => {
+            if (pricing.is_offer_active) {
+                // Показываем старую цену зачеркнутой
+                element.innerHTML = `<span>${pricing.original_price.toLocaleString()}р</span>`;
+                element.style.display = 'block';
+            } else {
+                // Скрываем старую цену, если спецпредложение истекло
+                element.style.display = 'none';
+            }
+        });
+        
+        console.log(`💰 Цена обновлена: ${pricing.current_price}р (спецпредложение: ${pricing.is_offer_active ? 'активно' : 'истекло'})`);
     },
 
     /**
      * Запустить обратный отсчет
      */
-    startCountdown(seconds) {
-        const updateTimer = () => {
-            if (seconds <= 0) {
-                this.showExpiredOffer();
+    startCountdown(remainingSeconds) {
+        let totalSeconds = remainingSeconds;
+        const timeElement = document.querySelector('.decoding-offer-time');
+        const timeElementExpired = document.getElementById('timerDisplayExpired');
+        
+        if (!timeElement) {
+            console.error('❌ Элемент таймера не найден');
+            return;
+        }
+
+        const updateCountdown = () => {
+            if (totalSeconds <= 0) {
+                // Время истекло
+                timeElement.textContent = '00:00:00';
+                timeElement.style.color = '#ff4444';
+                
+                if (timeElementExpired) {
+                    timeElementExpired.textContent = '00:00:00';
+                    timeElementExpired.style.color = '#ff4444';
+                }
+                
+                console.log('⏰ Время спецпредложения истекло');
+                
+                // Показываем блок с истекшим предложением
+                const promoActive = document.getElementById('promoActive');
+                const promoExpired = document.getElementById('promoExpired');
+                if (promoActive && promoExpired) {
+                    promoActive.style.display = 'none';
+                    promoExpired.style.display = 'block';
+                }
+                
+                // Обновляем цену на полную (если нужно)
+                // ВАЖНО: Реальные цены приходят через API из .env
                 return;
             }
+
+            // Вычисляем часы, минуты и секунды
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            // Форматируем время
+            const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = seconds % 60;
-            
-            const display = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-            $('#timerDisplay').text(display);
-            
-            seconds--;
-            setTimeout(updateTimer, 1000);
+            timeElement.textContent = timeString;
+            totalSeconds--;
+
+            // Продолжаем отсчет каждую секунду
+            setTimeout(updateCountdown, 1000);
         };
-        
-        updateTimer();
+
+        // Запускаем отсчет
+        updateCountdown();
     },
 
     /**
-     * Показать истекшее предложение
+     * Обработка платежа (общий метод для обеих кнопок)
      */
-    showExpiredOffer() {
-        $('#promoActive').hide();
-        $('#promoExpired').show();
+    async handlePayment(buttonElement) {
+        this.safeHapticFeedback('medium');
+        
+        const $button = $(buttonElement);
+        const originalText = $button.html();
+        const telegramId = this.getTelegramUserId();
+        
+        if (!telegramId) {
+            this.safeShowAlert('Ошибка: не удалось получить ID пользователя');
+            return;
+        }
+        
+        try {
+            $button.prop('disabled', true).html('Загрузка...');
+            
+            const response = await fetch(`${window.location.origin}/api/user/${telegramId}/start-premium-payment`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.status === 'success') {
+                console.log('✅ Платежная ссылка получена:', data.payment_link);
+                this.safeHapticFeedback('light');
+                // Перенаправляем пользователя на платежную страницу
+                window.location.href = data.payment_link;
+            } else {
+                console.error('❌ Ошибка при получении платежной ссылки:', data);
+                this.safeShowAlert('Ошибка при создании платежа. Попробуйте позже.');
+                $button.prop('disabled', false).html(originalText);
+            }
+        } catch (error) {
+            console.error('❌ Ошибка при создании платежа:', error);
+            this.safeShowAlert('Ошибка при создании платежа. Попробуйте позже.');
+            $button.prop('disabled', false).html(originalText);
+        }
+    },
+
+    /**
+     * Получение Telegram ID пользователя
+     */
+    getTelegramUserId() {
+        return window.TelegramWebApp ? window.TelegramWebApp.getUserId() : null;
+    },
+
+    /**
+     * Безопасная тактильная обратная связь
+     */
+    safeHapticFeedback(type = 'light') {
+        if (window.TelegramWebApp) {
+            try {
+                window.TelegramWebApp.hapticFeedback(type);
+            } catch (error) {
+                console.log('ℹ️ Тактильная обратная связь недоступна');
+            }
+        }
+    },
+
+    /**
+     * Безопасное отображение алерта
+     */
+    safeShowAlert(message) {
+        if (window.TelegramWebApp && window.TelegramWebApp.showAlert) {
+            window.TelegramWebApp.showAlert(message);
+        } else {
+            alert(message);
+        }
     }
 };
 
