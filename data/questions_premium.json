@@ -1,0 +1,270 @@
+{
+  "questions": [
+    {
+      "order_number": 1,
+      "text": "Расскажите о ситуации, когда вы чувствовали себя наиболее энергичным и вдохновленным. Что вас окружало в тот момент?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 2,
+      "text": "Опишите, как вы обычно принимаете важные решения. Опираетесь ли вы больше на логику, эмоции или интуицию?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 3,
+      "text": "Представьте, что вы попали в незнакомую компанию людей. Как вы обычно себя ведете в первые 15 минут?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 4,
+      "text": "Если бы ваша жизнь была книгой, как бы называлась текущая глава и что в ней происходит?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 5,
+      "text": "Расскажите о человеке, которым вы восхищаетесь. Что в нем вас больше всего впечатляет?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 6,
+      "text": "Опишите ситуацию, когда вы испытывали сильные эмоции. Как вы их проявили и что с ними делали?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 7,
+      "text": "Как вы обычно понимаете, что чувствуют другие люди? Приведите конкретный пример.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 8,
+      "text": "Расскажите о конфликте, в котором вы участвовали недавно. Как вы его разрешили?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 9,
+      "text": "Что для вас означает успех? Опишите свое представление об успешной жизни.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 10,
+      "text": "Если бы у вас было неограниченное количество времени и ресурсов, чем бы вы занимались?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 11,
+      "text": "Расскажите о моменте, когда вы чувствовали особую гордость за себя. За что именно?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 12,
+      "text": "Что вас больше всего расстраивает в поведении других людей? Почему?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 13,
+      "text": "Опишите, как вы обычно выражаете свое несогласие с кем-то. Приведите пример.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 14,
+      "text": "Расскажите о самых близких отношениях в вашей жизни. Что делает их особенными?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 15,
+      "text": "В какой роли вы чаще всего оказываетесь в группе людей: лидер, миротворец, наблюдатель или кто-то еще?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 16,
+      "text": "Опишите свой внутренний диалог в стрессовой ситуации - какие мысли приходят первыми?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 17,
+      "text": "Расскажите о ситуации, когда ваши убеждения о том, как к вам должны относиться, вызвали конфликт.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 18,
+      "text": "Как вы обычно анализируете сложные проблемы? Опишите свой процесс мышления.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 19,
+      "text": "Расскажите о решении, которое вы приняли интуитивно, без логического обоснования.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 20,
+      "text": "Какие мысли или убеждения регулярно мешают вам действовать так, как хотелось бы?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 21,
+      "text": "Расскажите о качестве в себе, которое вы категорически не принимаете.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 22,
+      "text": "Опишите ситуацию, когда вы сильно увлеклись проектом или человеком, а затем испытали разочарование.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 23,
+      "text": "Как вы реагируете на критику в свой адрес? Приведите конкретный пример.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 24,
+      "text": "Опишите ситуацию, когда страх критики помешал вам действовать.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 25,
+      "text": "Опишите, как различные эмоции проявляются в вашем теле - где вы их ощущаете?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 26,
+      "text": "Расскажите о хронических напряжениях или болях - с какими жизненными ситуациями они связаны?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 27,
+      "text": "Опишите физические ощущения, которые возникают у вас перед важными событиями.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 28,
+      "text": "Насколько ваши решения и поступки соответствуют вашей сущности?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 29,
+      "text": "Опишите моменты, когда жизнь кажется особенно осмысленной.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 30,
+      "text": "Если бы вы знали, что через год ваша жизнь кардинально изменится, что бы вы обязательно успели сделать?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 31,
+      "text": "Какую роль вы играете в семейной системе - миротворец, козел отпущения, герой?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 32,
+      "text": "Как паттерны ваших родительских отношений влияют на вашу взрослую жизнь?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 33,
+      "text": "Расскажите о семейном правиле или традиции, которую вы либо продолжаете, либо сознательно нарушаете.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 34,
+      "text": "Какие фразы или убеждения из детства до сих пор влияют на ваши решения?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 35,
+      "text": "Если бы ваша тревога была образом, как бы она выглядела? Опишите ее цвет, форму, размер.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 36,
+      "text": "Представьте свою основную жизненную проблему в виде метафоры или символа.",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 37,
+      "text": "Если бы вы были животным, каким именно и почему?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    },
+    {
+      "order_number": 38,
+      "text": "Опишите себя через метафору природного явления - что это будет?",
+      "test_version": "premium",
+      "allow_voice": true,
+      "max_length": 1500
+    }
+  ]
+}

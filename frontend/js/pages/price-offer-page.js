@@ -141,8 +141,46 @@ window.PriceOfferPage = {
             }
         });
 
-        // Обработка кнопки "Выбрать способ оплаты" для премиум отчета
+        // Обработка кнопки "Выбрать способ оплаты" для премиум отчета (активное предложение)
         $('#startPremiumFromOffer').off('click').on('click', async (e) => {
+            e.preventDefault();
+            this.safeHapticFeedback('medium');
+
+            const $button = $(e.currentTarget);
+            const originalText = $button.html();
+            const telegramId = this.getTelegramUserId();
+
+            try {
+                $button.prop('disabled', true).html('Загрузка...');
+
+                const response = await fetch(`${window.location.origin}/api/user/${telegramId}/start-premium-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    console.log('✅ Платежная ссылка получена:', data.payment_link);
+                    this.safeHapticFeedback('light');
+                    // Перенаправляем пользователя на платежную страницу
+                    window.location.href = data.payment_link;
+                } else {
+                    console.error('❌ Ошибка при получении платежной ссылки:', data);
+                    this.safeShowAlert('Ошибка при создании платежа. Попробуйте позже.');
+                    $button.prop('disabled', false).html(originalText);
+                }
+            } catch (error) {
+                console.error('❌ Ошибка при создании платежа:', error);
+                this.safeShowAlert('Ошибка при создании платежа. Попробуйте позже.');
+                $button.prop('disabled', false).html(originalText);
+            }
+        });
+
+        // Обработка кнопки "Выбрать способ оплаты" для премиум отчета (истекшее предложение)
+        $('#startPremiumFromOfferExpired').off('click').on('click', async (e) => {
             e.preventDefault();
             this.safeHapticFeedback('medium');
 
@@ -272,12 +310,28 @@ window.PriceOfferPage = {
         if (timeElement) {
             timeElement.textContent = timer.time_string;
             
-            // Если время истекло, показываем 00:00:00
+            // Если время истекло, показываем 00:00:00 и переключаем блоки
             if (timer.is_expired) {
                 timeElement.textContent = '00:00:00';
                 timeElement.style.color = '#ff4444'; // Красный цвет для истекшего времени
+                
+                // Показываем блок с истекшим предложением
+                const promoActive = document.getElementById('promoActive');
+                const promoExpired = document.getElementById('promoExpired');
+                if (promoActive && promoExpired) {
+                    promoActive.style.display = 'none';
+                    promoExpired.style.display = 'block';
+                }
             } else {
                 timeElement.style.color = ''; // Возвращаем обычный цвет
+                
+                // Показываем блок с активным предложением
+                const promoActive = document.getElementById('promoActive');
+                const promoExpired = document.getElementById('promoExpired');
+                if (promoActive && promoExpired) {
+                    promoActive.style.display = 'block';
+                    promoExpired.style.display = 'none';
+                }
             }
         }
         
@@ -291,23 +345,26 @@ window.PriceOfferPage = {
      * Обновление отображения цены
      */
     updatePricingDisplay(pricing) {
-        const currentPriceElement = document.querySelector('.decoding-offer-button-current-price');
-        const oldPriceElement = document.querySelector('.decoding-offer-button-old-price');
+        // Обновляем цену в обоих блоках (активном и истекшем)
+        const currentPriceElements = document.querySelectorAll('.decoding-offer-button-current-price');
+        const oldPriceElements = document.querySelectorAll('.decoding-offer-button-old-price');
         
-        if (currentPriceElement) {
-            currentPriceElement.textContent = `${pricing.current_price.toLocaleString()}р`;
-        }
+        // Обновляем все элементы с текущей ценой
+        currentPriceElements.forEach(element => {
+            element.textContent = `${pricing.current_price.toLocaleString()}р`;
+        });
         
-        if (oldPriceElement) {
+        // Обновляем все элементы со старой ценой
+        oldPriceElements.forEach(element => {
             if (pricing.is_offer_active) {
                 // Показываем старую цену зачеркнутой
-                oldPriceElement.innerHTML = `вместо <span>${pricing.original_price.toLocaleString()}р</span>`;
-                oldPriceElement.style.display = 'block';
+                element.innerHTML = `<span>${pricing.original_price.toLocaleString()}р</span>`;
+                element.style.display = 'block';
             } else {
                 // Скрываем старую цену, если спецпредложение истекло
-                oldPriceElement.style.display = 'none';
+                element.style.display = 'none';
             }
-        }
+        });
         
         console.log(`💰 Цена обновлена: ${pricing.current_price}р (спецпредложение: ${pricing.is_offer_active ? 'активно' : 'истекло'})`);
     },
@@ -330,6 +387,14 @@ window.PriceOfferPage = {
                 timeElement.textContent = '00:00:00';
                 timeElement.style.color = '#ff4444';
                 console.log('⏰ Время спецпредложения истекло');
+                
+                // Показываем блок с истекшим предложением
+                const promoActive = document.getElementById('promoActive');
+                const promoExpired = document.getElementById('promoExpired');
+                if (promoActive && promoExpired) {
+                    promoActive.style.display = 'none';
+                    promoExpired.style.display = 'block';
+                }
                 
                 // Обновляем цену на полную
                 // ВАЖНО: Эти значения используются только при истечении таймера на клиенте. Реальные цены приходят через API из .env

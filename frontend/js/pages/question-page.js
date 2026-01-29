@@ -229,7 +229,7 @@ window.QuestionPage = {
      */
     updateButtonState() {
         const answerText = $('#questionArea').val().trim();
-        const minLength = 500;
+        const minLength = 350;
         const currentLength = answerText.length;
         
         // Обновляем счетчик символов
@@ -376,9 +376,9 @@ window.QuestionPage = {
             }
 
             // Проверка на минимальное количество символов
-            if (answer.length < 500) {
+            if (answer.length < 350) {
                 console.log('❌ Ответ слишком короткий:', answer.length, 'символов');
-                window.TelegramWebApp?.showAlert('Ответ должен содержать минимум 500 символов');
+                window.TelegramWebApp?.showAlert('Ответ должен содержать минимум 350 символов');
                 return;
             }
 

@@ -783,6 +783,95 @@ class ReportGenerator:
             print(f"❌ Ошибка при создании PDF отчета: {e}")
             return self.create_text_report(user, analysis_result)
 
+    def create_free_basic_pdf_report(self, user: User, analysis_result: Dict) -> str:
+        """
+        Создание упрощенного бесплатного PDF отчета (2.5-3 страницы)
+        Использует только базовые шаблоны из template_pdf
+        """
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        filename = f"prizma_free_report_{user.telegram_id}_{timestamp}.pdf"
+        output_path = self.reports_dir / filename
+        
+        try:
+            temp_dir = self.reports_dir / "temp_free"
+            temp_dir.mkdir(exist_ok=True)
+            temp_files = []
+            
+            # Создаем страницы с анализом (используем шаблон 3.pdf для всех страниц)
+            template3_path = self.template_dir / "3.pdf"
+            
+            # Страница 1: Тип личности
+            if analysis_result.get('personality_type'):
+                buffers = self.pdf_generator.create_text_pages(
+                    analysis_result['personality_type'], template3_path)
+                for i, buf in enumerate(buffers):
+                    page_path = temp_dir / f"personality_{i+1}.pdf"
+                    with open(page_path, 'wb') as f:
+                        f.write(buf.getvalue())
+                    temp_files.append(page_path)
+            
+            # Страница 2: Уникальность
+            if analysis_result.get('uniqueness'):
+                template4_path = self.template_dir / "4.pdf"
+                buffers = self.pdf_generator.create_text_pages(
+                    analysis_result['uniqueness'], template4_path)
+                for i, buf in enumerate(buffers):
+                    page_path = temp_dir / f"uniqueness_{i+1}.pdf"
+                    with open(page_path, 'wb') as f:
+                        f.write(buf.getvalue())
+                    temp_files.append(page_path)
+            
+            # Страница 3: Ключевой инсайт
+            if analysis_result.get('key_insight'):
+                template5_path = self.template_dir / "5.pdf"
+                buffers = self.pdf_generator.create_text_pages(
+                    analysis_result['key_insight'], template5_path)
+                for i, buf in enumerate(buffers):
+                    page_path = temp_dir / f"insight_{i+1}.pdf"
+                    with open(page_path, 'wb') as f:
+                        f.write(buf.getvalue())
+                    temp_files.append(page_path)
+            
+            # Собираем PDF: титульная + аналитические страницы + заключительные
+            pdf_parts = [
+                self.template_dir / "1.pdf",  # Титульная
+            ]
+            
+            # Добавляем все аналитические страницы
+            for f in temp_files:
+                pdf_parts.append(f)
+            
+            # Добавляем заключительные страницы
+            pdf_parts += [
+                self.template_dir / "6.pdf",  # Информация о премиум версии
+                self.template_dir / "7.pdf",  # Контакты
+            ]
+            
+            # Объединяем все PDF
+            success = self.pdf_generator.combine_pdfs(pdf_parts, output_path)
+            
+            # Очищаем временные файлы
+            for temp_file in temp_files:
+                if temp_file.exists():
+                    temp_file.unlink()
+            
+            if temp_dir.exists() and not list(temp_dir.iterdir()):
+                temp_dir.rmdir()
+            
+            if success:
+                print(f"✅ Бесплатный PDF отчет создан: {output_path}")
+                return str(output_path)
+            else:
+                raise Exception("Ошибка при объединении PDF файлов")
+                
+        except Exception as e:
+            print(f"❌ Ошибка при создании бесплатного PDF отчета: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback: создаем текстовый отчет
+            return self.create_text_report(user, analysis_result)
+
     def create_premium_pdf_report(self, user: User, analysis_result: Dict) -> str:
         """Создание платного PDF отчета с использованием template_pdf_premium шаблонов"""
         

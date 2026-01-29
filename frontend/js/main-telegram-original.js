@@ -864,9 +864,9 @@ $(function() {
                 return;
             }
             
-            if (answerText.length < 500) {
+            if (answerText.length < 350) {
                 console.log('❌ Ответ слишком короткий:', answerText.length, 'символов');
-                safeShowAlert('Ответ должен содержать минимум 500 символов');
+                safeShowAlert('Ответ должен содержать минимум 350 символов');
                 return;
             }
             

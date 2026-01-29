@@ -7,7 +7,7 @@ import decimal
 
 from bot.database.models import User, Question, Answer, Payment, Report, QuestionType, PaymentStatus, ReportGenerationStatus
 from bot.database.database import async_session
-from bot.config import FREE_QUESTIONS_LIMIT
+from bot.config import FREE_QUESTIONS_LIMIT, PREMIUM_QUESTIONS_COUNT
 from bot.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -139,13 +139,48 @@ class DatabaseService:
             await session.commit()
             return user
     
-    async def complete_test(self, telegram_id: int) -> User:
-        """Завершить тест для пользователя"""
+    async def complete_test(self, telegram_id: int, test_version: str = "free") -> User:
+        """Завершить тест для пользователя (с указанием версии теста)"""
         async with async_session() as session:
             stmt = select(User).where(User.telegram_id == telegram_id)
             result = await session.execute(stmt)
             user = result.scalar_one()
             
+            # Удаляем старые отчеты при новом прохождении теста
+            import glob
+            from pathlib import Path
+            reports_dir = Path("reports")
+            
+            # Удаляем старые бесплатные отчеты
+            if test_version == "free":
+                pattern = f"prizma_report_{telegram_id}_*.pdf"
+                old_reports = glob.glob(str(reports_dir / pattern))
+                for old_report in old_reports:
+                    try:
+                        Path(old_report).unlink()
+                        logger.info(f"🗑️ Удален старый бесплатный отчет: {old_report}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Не удалось удалить старый отчет {old_report}: {e}")
+            
+            # Удаляем старые премиум отчеты
+            if test_version == "premium":
+                pattern = f"prizma_premium_report_{telegram_id}_*.pdf"
+                old_reports = glob.glob(str(reports_dir / pattern))
+                for old_report in old_reports:
+                    try:
+                        Path(old_report).unlink()
+                        logger.info(f"🗑️ Удален старый премиум отчет: {old_report}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Не удалось удалить старый отчет {old_report}: {e}")
+            
+            if test_version == "free":
+                user.free_test_completed = True
+                user.current_free_question_id = None
+            else:
+                user.premium_test_completed = True
+                user.current_premium_question_id = None
+            
+            # Обратная совместимость
             user.test_completed = True
             user.test_completed_at = datetime.utcnow()
             user.current_question_id = None
@@ -262,10 +297,15 @@ class DatabaseService:
 
     # --- Работа с вопросами ---
     
-    async def get_first_question(self) -> Question:
-        """Получить первый вопрос"""
+    async def get_first_question(self, test_version: str = "free") -> Question:
+        """Получить первый вопрос указанного теста"""
         async with async_session() as session:
-            stmt = select(Question).where(Question.is_active == True).order_by(Question.order_number).limit(1)
+            stmt = select(Question).where(
+                and_(
+                    Question.is_active == True,
+                    Question.test_version == test_version
+                )
+            ).order_by(Question.order_number).limit(1)
             result = await session.execute(stmt)
             return result.scalar_one()
     
@@ -276,8 +316,8 @@ class DatabaseService:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
     
-    async def get_next_question(self, current_question_id: int, is_paid: bool) -> Optional[Question]:
-        """Получить следующий вопрос"""
+    async def get_next_question(self, current_question_id: int, test_version: str = "free") -> Optional[Question]:
+        """Получить следующий вопрос в рамках указанного теста"""
         async with async_session() as session:
             # Получаем текущий вопрос для определения order_number
             current_stmt = select(Question).where(Question.id == current_question_id)
@@ -287,27 +327,31 @@ class DatabaseService:
             if not current_question:
                 return None
             
-            # Формируем условия для поиска следующего вопроса
+            # Формируем условия для поиска следующего вопроса в том же тесте
             conditions = [
                 Question.order_number > current_question.order_number,
-                Question.is_active == True
+                Question.is_active == True,
+                Question.test_version == test_version
             ]
-            
-            # Если пользователь не платный, ограничиваем первыми N вопросами
-            if not is_paid:
-                conditions.append(Question.order_number <= FREE_QUESTIONS_LIMIT)
             
             stmt = select(Question).where(and_(*conditions)).order_by(Question.order_number).limit(1)
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
     
-    async def get_total_questions(self, is_paid: bool) -> int:
-        """Получить общее количество вопросов"""
-        if not is_paid:
+    async def get_total_questions(self, test_version: str = "free") -> int:
+        """Получить общее количество вопросов для указанного теста"""
+        if test_version == "free":
             return FREE_QUESTIONS_LIMIT
+        else:
+            return PREMIUM_QUESTIONS_COUNT
             
+    async def get_total_questions_by_version(self, test_version: str) -> int:
+        """Получить реальное количество вопросов из БД для указанного теста"""
         async with async_session() as session:
-            conditions = [Question.is_active == True]
+            conditions = [
+                Question.is_active == True,
+                Question.test_version == test_version
+            ]
             
             stmt = select(Question).where(and_(*conditions))
             result = await session.execute(stmt)

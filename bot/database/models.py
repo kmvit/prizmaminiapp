@@ -44,6 +44,12 @@ class User(Base):
     current_question_id = Column(Integer, ForeignKey("questions.id"), nullable=True)
     test_completed = Column(Boolean, default=False)
     
+    # Раздельное отслеживание прогресса free/premium тестов
+    free_test_completed = Column(Boolean, default=False)
+    premium_test_completed = Column(Boolean, default=False)
+    current_free_question_id = Column(Integer, nullable=True)
+    current_premium_question_id = Column(Integer, nullable=True)
+    
     # Статусы генерации отчетов
     free_report_status = Column(SQLEnum(ReportGenerationStatus), default=ReportGenerationStatus.PENDING)
     premium_report_status = Column(SQLEnum(ReportGenerationStatus), default=ReportGenerationStatus.PENDING)
@@ -83,6 +89,9 @@ class Question(Base):
     text = Column(Text, nullable=False)
     type = Column(SQLEnum(QuestionType), nullable=False, default=QuestionType.FREE)
     order_number = Column(Integer, nullable=False, unique=True)
+    
+    # Разделение на бесплатный и платный тесты
+    test_version = Column(String(20), default="free")  # "free" или "premium"
     
     # Настройки вопроса
     is_active = Column(Boolean, default=True)

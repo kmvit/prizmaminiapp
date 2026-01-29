@@ -1542,6 +1542,80 @@ class AIAnalysisService:
             "timestamp": timestamp
         }
 
+    async def generate_free_basic_report(self, user: User, questions: List[Question], answers: List[Answer]) -> Dict:
+        """
+        Генерация бесплатного базового отчета на основе 8 вопросов (2.5-3 страницы)
+        Использует промпты из FreeBasicPrompts
+        """
+        try:
+            from bot.prompts.free_basic import FreeBasicPrompts
+            
+            if self.perplexity_enabled and self.ai_service:
+                print(f"🧠 Запускаем AI анализ для бесплатного отчета пользователя {user.telegram_id}...")
+                
+                # Подготавливаем данные для анализа
+                questions_text = "\n\n".join([
+                    f"Вопрос {i+1}: {q.text}\nОтвет: {a.text_answer}"
+                    for i, (q, a) in enumerate(zip(questions, answers))
+                ])
+                
+                # Генерируем три блока анализа
+                analyses = {}
+                prompts_map = FreeBasicPrompts.get_context_prompts_map()
+                
+                for block_name, prompt_func in prompts_map.items():
+                    try:
+                        full_prompt = FreeBasicPrompts.get_common_context() + "\n\n" + prompt_func() + "\n\nДанные пользователя:\n" + questions_text
+                        
+                        # TODO: Реализовать вызов Perplexity API для каждого блока
+                        # analysis_text = await self.ai_service.analyze_with_prompt(full_prompt)
+                        
+                        # Временно используем fallback
+                        analyses[block_name] = f"Анализ блока {block_name} (AI временно недоступен)"
+                    except Exception as e:
+                        print(f"⚠️ Ошибка анализа блока {block_name}: {e}")
+                        analyses[block_name] = f"Анализ {block_name}"
+                
+                analysis_result = {
+                    "success": True,
+                    "personality_type": analyses.get("personality_type", ""),
+                    "uniqueness": analyses.get("uniqueness", ""),
+                    "key_insight": analyses.get("key_insight", ""),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            else:
+                print(f"ℹ️ Perplexity AI отключен, создаем базовый отчет без анализа")
+                analysis_result = {
+                    "success": True,
+                    "personality_type": "Ваш психологический профиль показывает уникальные особенности.",
+                    "uniqueness": "Сочетание ваших качеств делает вас особенным.",
+                    "key_insight": "Ваш подход к жизни основан на балансе.",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            
+            # Создаем упрощенный PDF отчет
+            print(f"📄 Создаем бесплатный PDF отчет...")
+            report_filepath = self.report_generator.create_free_basic_pdf_report(user, analysis_result)
+            
+            print(f"✅ Бесплатный отчет успешно создан: {report_filepath}")
+            
+            return {
+                "success": True,
+                "analysis": analysis_result,
+                "report_file": report_filepath,
+                "timestamp": analysis_result["timestamp"]
+            }
+            
+        except Exception as e:
+            print(f"❌ Ошибка при генерации бесплатного отчета: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "success": False,
+                "error": str(e),
+                "stage": "free_basic_report"
+            }
+
     async def generate_premium_report(self, user: User, questions: List[Question], answers: List[Answer]) -> Dict:
         """Генерация платного психологического отчета (50 вопросов) - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ"""
 

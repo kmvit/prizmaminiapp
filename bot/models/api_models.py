@@ -4,7 +4,7 @@ from datetime import datetime
 
 # Модели запросов
 class AnswerRequest(BaseModel):
-    text_answer: str = Field(..., min_length=1, max_length=5000, description="Текст ответа пользователя")
+    text_answer: str = Field(..., min_length=350, max_length=5000, description="Текст ответа пользователя")
     answer_type: str = Field(default="text", description="Тип ответа: text или voice")
 
 class UserProfileUpdate(BaseModel):

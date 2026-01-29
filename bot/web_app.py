@@ -87,7 +87,8 @@ async def get_current_question(telegram_id: int):
                         last_question = max(answered_questions, key=lambda x: x.order_number)
                         
                         if last_question:
-                            next_question = await db_service.get_next_question(last_question.id, user.is_paid)
+                            test_version = "premium" if user.is_paid else "free"
+                            next_question = await db_service.get_next_question(last_question.id, test_version)
                             if next_question:
                                 # Обновляем текущий вопрос пользователя
                                 await update_user_current_question(telegram_id, next_question.id)
@@ -124,7 +125,8 @@ async def get_current_question(telegram_id: int):
             raise HTTPException(status_code=404, detail="Question not found")
         
         # Получаем общее количество вопросов для этого пользователя
-        total_questions = await db_service.get_total_questions(user.is_paid)
+        test_version = "premium" if user.is_paid else "free"
+        total_questions = await db_service.get_total_questions(test_version)
         
         # Получаем количество уже отвеченных вопросов
         answers = await db_service.get_user_answers(telegram_id)
@@ -193,10 +195,11 @@ async def save_answer(telegram_id: int, answer_data: AnswerRequest):
         logger.info(f"ℹ️ Ответ {answer.id} сохранен (ИИ-анализ будет выполнен при генерации отчета)")
         
         # Получаем следующий вопрос
-        logger.info(f"🔍 Поиск следующего вопроса: current_order={current_question.order_number}, is_paid={user.is_paid}")
+        test_version = "premium" if user.is_paid else "free"
+        logger.info(f"🔍 Поиск следующего вопроса: current_order={current_question.order_number}, is_paid={user.is_paid}, test_version={test_version}")
         next_question = await db_service.get_next_question(
             current_question.id,
-            user.is_paid
+            test_version
         )
         logger.info(f"🎯 Результат поиска: {next_question.order_number if next_question else 'None'}")
         
@@ -205,7 +208,8 @@ async def save_answer(telegram_id: int, answer_data: AnswerRequest):
             await update_user_current_question(telegram_id, next_question.id)
             
             # Получаем общее количество вопросов
-            total_questions = await db_service.get_total_questions(user.is_paid)
+            test_version = "premium" if user.is_paid else "free"
+            total_questions = await db_service.get_total_questions(test_version)
             answers = await db_service.get_user_answers(telegram_id)
             answered_count = len(answers)
             
@@ -256,7 +260,8 @@ async def get_user_progress(telegram_id: int):
     try:
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         answers = await db_service.get_user_answers(telegram_id)
-        total_questions = await db_service.get_total_questions(user.is_paid)
+        test_version = "premium" if user.is_paid else "free"
+        total_questions = await db_service.get_total_questions(test_version)
         
         return UserProgressResponse(
             user={
@@ -479,14 +484,14 @@ async def start_report_generation(telegram_id: int, background_tasks: Background
             logger.info(f"⏳ Отчет уже генерируется для пользователя {telegram_id}")
             return {"status": "already_processing", "message": "Отчет уже генерируется. Пожалуйста, подождите."}
         
-        # Проверяем, не существует ли уже готовый отчет
+        # Проверяем, не существует ли уже готовый отчет, созданный после завершения теста
         import glob
         reports_dir = Path("reports")
         pattern = f"prizma_report_{telegram_id}_*.pdf"
         report_files = glob.glob(str(reports_dir / pattern))
+        
         if report_files:
-            logger.info(f"✅ Отчет уже существует для пользователя {telegram_id}, не запускаем повторную генерацию")
-            # Сортируем и берем последний
+            # Функция для извлечения timestamp
             def extract_timestamp(filepath):
                 filename = Path(filepath).name
                 parts = filename.split('_')
@@ -498,9 +503,29 @@ async def start_report_generation(telegram_id: int, background_tasks: Background
                     except:
                         pass
                 return str(int(Path(filepath).stat().st_mtime))
-            report_files.sort(key=extract_timestamp, reverse=True)
-            latest_report = report_files[0]
-            return {"status": "already_exists", "message": "Отчет уже существует", "report_path": latest_report}
+            
+            # Фильтруем отчеты: берем только те, что созданы после завершения текущего теста
+            test_completed_at = user.test_completed_at
+            valid_reports = []
+            
+            if test_completed_at:
+                test_date_str = test_completed_at.strftime("%Y%m%d_%H%M%S")
+                for report_file in report_files:
+                    report_timestamp = extract_timestamp(report_file)
+                    if report_timestamp >= test_date_str:
+                        valid_reports.append(report_file)
+                        logger.info(f"✅ Отчет {Path(report_file).name} валиден (создан после завершения теста)")
+                    else:
+                        logger.info(f"⚠️ Отчет {Path(report_file).name} устарел, будет удален при следующем прохождении")
+            
+            if valid_reports:
+                # Сортируем и берем последний валидный отчет
+                valid_reports.sort(key=extract_timestamp, reverse=True)
+                latest_report = valid_reports[0]
+                logger.info(f"✅ Валидный отчет уже существует для пользователя {telegram_id}, не запускаем повторную генерацию")
+                return {"status": "already_exists", "message": "Отчет уже существует", "report_path": latest_report}
+            else:
+                logger.info(f"🔄 Все существующие отчеты устарели для пользователя {telegram_id}, запускаем новую генерацию")
         
         logger.info(f"🚀 Запускаем асинхронную генерацию БЕСПЛАТНОГО отчета для пользователя {telegram_id}")
         
@@ -601,11 +626,55 @@ async def download_personal_report(telegram_id: int, download: Optional[str] = N
         
         # Сортируем по timestamp (последний будет первым) и берем последний отчет
         report_files.sort(key=extract_timestamp, reverse=True)
-        latest_report = report_files[0]
         
-        logger.info(f"📋 Найдено отчетов: {len(report_files)}")
-        logger.info(f"📄 Выбран последний отчет: {latest_report}")
-        for i, report in enumerate(report_files[:3]):  # Показываем первые 3 для отладки
+        # Фильтруем отчеты: берем только те, что созданы после завершения текущего теста
+        test_completed_at = user.test_completed_at
+        valid_reports = []
+        
+        if test_completed_at:
+            # Преобразуем test_completed_at в формат для сравнения
+            test_date_str = test_completed_at.strftime("%Y%m%d_%H%M%S")
+            
+            for report_file in report_files:
+                report_timestamp = extract_timestamp(report_file)
+                # Сравниваем timestamp отчета с датой завершения теста
+                if report_timestamp >= test_date_str:
+                    valid_reports.append(report_file)
+                    logger.info(f"✅ Отчет {Path(report_file).name} валиден (создан после завершения теста)")
+                else:
+                    logger.warning(f"⚠️ Отчет {Path(report_file).name} устарел (создан до завершения теста), пропускаем")
+        else:
+            # Если test_completed_at не установлен, берем последний отчет
+            valid_reports = report_files[:1] if report_files else []
+            logger.warning(f"⚠️ test_completed_at не установлен для пользователя {telegram_id}, используем последний отчет")
+        
+        if not valid_reports:
+            logger.warning(f"⚠️ Нет валидных отчетов для пользователя {telegram_id} после завершения теста")
+            # Если нет валидных отчетов, но есть старые - запускаем генерацию
+            if report_files:
+                logger.info(f"🔄 Запускаем генерацию нового отчета...")
+                # Обновляем статус в БД перед генерацией
+                await db_service.update_report_generation_status(
+                    telegram_id, 
+                    "free", 
+                    ReportGenerationStatus.PROCESSING
+                )
+                try:
+                    await generate_report_background(telegram_id)
+                    # Повторно ищем отчет после генерации
+                    report_files = glob.glob(str(reports_dir / pattern))
+                    if report_files:
+                        report_files.sort(key=extract_timestamp, reverse=True)
+                        valid_reports = report_files[:1]
+                except Exception as e:
+                    logger.error(f"❌ Ошибка при генерации отчета: {e}")
+                    raise HTTPException(status_code=500, detail="Ошибка создания отчета. Попробуйте позже.")
+        
+        latest_report = valid_reports[0]
+        
+        logger.info(f"📋 Найдено отчетов: {len(report_files)}, валидных: {len(valid_reports)}")
+        logger.info(f"📄 Выбран валидный отчет: {latest_report}")
+        for i, report in enumerate(valid_reports[:3]):  # Показываем первые 3 для отладки
             logger.info(f"   {i+1}. {Path(report).name} (timestamp: {extract_timestamp(report)})")
         
         if not os.path.exists(latest_report):
@@ -1302,12 +1371,50 @@ async def download_premium_personal_report(telegram_id: int, download: Optional[
                     pass
             return str(int(Path(filepath).stat().st_mtime))
         
-        # Сортируем по timestamp и берем последний отчет
+        # Сортируем по timestamp и фильтруем отчеты, созданные после завершения теста
         report_files.sort(key=extract_timestamp, reverse=True)
-        latest_report = report_files[0]
         
-        logger.info(f"📋 Найдено платных отчетов: {len(report_files)}")
-        logger.info(f"📄 Выбран последний платный отчет: {latest_report}")
+        # Фильтруем отчеты: берем только те, что созданы после завершения текущего теста
+        test_completed_at = user.test_completed_at
+        valid_reports = []
+        
+        if test_completed_at:
+            test_date_str = test_completed_at.strftime("%Y%m%d_%H%M%S")
+            for report_file in report_files:
+                report_timestamp = extract_timestamp(report_file)
+                if report_timestamp >= test_date_str:
+                    valid_reports.append(report_file)
+                    logger.info(f"✅ Премиум отчет {Path(report_file).name} валиден (создан после завершения теста)")
+                else:
+                    logger.warning(f"⚠️ Премиум отчет {Path(report_file).name} устарел (создан до завершения теста), пропускаем")
+        else:
+            # Если test_completed_at не установлен, берем последний отчет
+            valid_reports = report_files[:1] if report_files else []
+            logger.warning(f"⚠️ test_completed_at не установлен для пользователя {telegram_id}, используем последний отчет")
+        
+        if not valid_reports:
+            logger.warning(f"⚠️ Нет валидных премиум отчетов для пользователя {telegram_id} после завершения теста")
+            # Если нет валидных отчетов, но есть старые - запускаем генерацию
+            if report_files:
+                logger.info(f"🔄 Запускаем генерацию нового премиум отчета...")
+                try:
+                    await generate_premium_report_background(telegram_id)
+                    # Повторно ищем отчет после генерации
+                    report_files = glob.glob(str(reports_dir / pattern))
+                    if report_files:
+                        report_files.sort(key=extract_timestamp, reverse=True)
+                        valid_reports = report_files[:1]
+                except Exception as e:
+                    logger.error(f"❌ Ошибка при генерации премиум отчета: {e}")
+                    raise HTTPException(status_code=500, detail="Ошибка создания премиум отчета. Попробуйте позже.")
+        
+        latest_report = valid_reports[0] if valid_reports else None
+        
+        if not latest_report:
+            raise HTTPException(status_code=404, detail="Премиум отчет не найден")
+        
+        logger.info(f"📋 Найдено платных отчетов: {len(report_files)}, валидных: {len(valid_reports)}")
+        logger.info(f"📄 Выбран валидный премиум отчет: {latest_report}")
         
         if not os.path.exists(latest_report):
             logger.error(f"❌ Файл платного отчета не найден: {latest_report}")

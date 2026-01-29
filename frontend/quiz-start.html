@@ -6,41 +6,62 @@
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="format-detection" content="telephone=no">
-    <title>PRIZMA</title>
+    <title>PRIZMA - Бесплатный мини-анализ личности</title>
     <link rel="stylesheet" href="css/main.css">
 </head>
 
-<body class="main quiz-completed-base">
+<body class="main quiz-start-page">
 
 <main>
     <div class="page-wrapper page-wrapper-quiz-start">
         <div class="logo-wrapper">
-            <img src="./images/logo.svg" alt="logo">
+            <img src="./images/prizma-logo-bubble.svg" alt="logo">
         </div>
+        <div class="subtitle">Ваш личный ИИ – психолог и наставник</div>
         <h1 class="linear-text page-head">
-            Базовый мини–анализ личности готов!
+            Бесплатный
+            <br>
+            мини–анализ личности
         </h1>
-        <div class="quiz-base-head">
-            <div class="quiz-benefits">
-                <div class="quiz-benefit">
-                    <span>3 страницы анализа</span>
-                </div>
-                <div class="quiz-benefit">
-                    <span>3 рекомендации</span>
-                </div>
-                <div class="quiz-benefit">
-                    <span>2 базовые методики</span>
-                </div>
-                <div class="quiz-benefit">
-                    <span> Личные инсайты</span>
+        <div class="quiz-benefits">
+            <div class="quiz-benefit">
+                <span>3 страницы анализа</span>
+            </div>
+            <div class="quiz-benefit">
+                <span>2 базовые методики</span>
+            </div>
+            <div class="quiz-benefit">
+                <span>3 рекомендации</span>
+            </div>
+            <div class="quiz-benefit">
+                <span> Личные инсайты</span>
+            </div>
+        </div>
+        <div class="login-form">
+            <div class="form-text">Заполните поля, чтобы начать тест:</div>
+            <div class="login-form-item">
+                <input type="text" id="nameInput" placeholder="Имя" class="login-form-input" required>
+            </div>
+            <div class="login-form-item">
+                <input type="number" id="ageInput" placeholder="Возраст" class="login-form-input" required>
+            </div>
+            <div class="login-form-item">
+                <div class="custom-select">
+                    <div class="select-selected">
+                        <span class="select-placeholder">Пол</span>
+                        <img src="./images/arrow-bottom-icon.svg" alt="" class="custom-arrow">
+                    </div>
+                    <div class="select-options" id="selectOptions">
+                        <div class="option" data-value="male">Мужской</div>
+                        <div class="option" data-value="female">Женский</div>
+                    </div>
+                    <input type="hidden" name="gender" id="genderInput">
                 </div>
             </div>
-            <div class="quiz-result">
-                <img src="./images/result-ico-pdf.webp" alt="result-ico-pdf" class="quiz-result-img">
-                <button id="downloadFreeReport" class="link-download-result">
-                    <span class="download-file-text"><span>Скачать</span></span>
-                </button>
-            </div>
+            <a href="#" id="startTestButton" class="quiz-form-notice">
+                Ответить на 8 вопросов и получить
+                мини–анализ БЕСПЛАТНО
+            </a>
         </div>
     </div>
     <div class="quiz-benefits-container">
@@ -56,7 +77,7 @@
                     <p>38 глубоких вопросов</p>
                 </div>
                 <div class="benefit-card">
-                    <img src="./images/benefits-text-group.png" alt="">
+                    <img src="./images/benefits-text-group.svg" alt="">
                 </div>
                 <div class="benefit-text-block">
                     <div class="text-title">Нас выбирают:</div>
@@ -98,7 +119,7 @@
                 </a>
                 <a href="#" class="test-card blocked">
                     <div class="card-ico">
-                        <img src="./images/test-card-ico2.webp" alt="test-card-ico1">
+                        <img src="./images/test-card-ico2.webp" alt="test-card-ico2">
                     </div>
                     <div class="card-content">
                         <div class="card-title">Где ваш истинный потенциал?</div>
@@ -110,7 +131,7 @@
                 </a>
                 <a href="#" class="test-card blocked">
                     <div class="card-ico">
-                        <img src="./images/test-card-ico3.webp" alt="test-card-ico1">
+                        <img src="./images/test-card-ico3.webp" alt="test-card-ico3">
                     </div>
                     <div class="card-content">
                         <div class="card-title">Что мешает росту?</div>
@@ -122,7 +143,7 @@
                 </a>
                 <a href="#" class="test-card blocked">
                     <div class="card-ico">
-                        <img src="./images/test-card-ico4.webp" alt="test-card-ico1">
+                        <img src="./images/test-card-ico4.webp" alt="test-card-ico4">
                     </div>
                     <div class="card-content">
                         <div class="card-title">Ваши отношения с людьми</div>
@@ -155,7 +176,7 @@
             <div class="quiz-test-cards">
                 <a href="#" class="test-card blocked">
                     <div class="card-ico">
-                        <img src="./images/test-card-ico5.webp" alt="test-card-ico1">
+                        <img src="./images/test-card-ico5.webp" alt="test-card-ico5">
                     </div>
                     <div class="card-content">
                         <div class="card-title">Как применить знания?</div>
@@ -167,7 +188,7 @@
                 </a>
                 <a href="#" class="test-card blocked">
                     <div class="card-ico">
-                        <img src="./images/test-card-ico6.webp" alt="test-card-ico1">
+                        <img src="./images/test-card-ico6.webp" alt="test-card-ico6">
                     </div>
                     <div class="card-content">
                         <div class="card-title">Какие ресурсы помогут? </div>
@@ -182,12 +203,12 @@
                 <div class="promo-notice">
                     <p>Спецпредложение</p>
                     <p>для новых пользователей сгорит:</p>
-                    <div class="promo-duration decoding-offer-time">11:59:04</div>
-                    <a href="#" id="startPremiumFromOffer" class="promo-button decoding-offer-button">
+                    <div class="promo-duration" id="timerDisplay">11:59:04</div>
+                    <a href="price-offer.html" class="promo-button" id="buyDiscountButton">
                         <img src="images/promo-fire-ico.webp" class="promo-ico" alt="promo-ico-fire">
                         <div class="promo-price">
-                            <div class="price-item decoding-offer-button-current-price">3.590р</div>
-                            <div class="price-item-old decoding-offer-button-old-price"><span>6.980р</span></div>
+                            <div class="price-item">3.590р</div>
+                            <div class="price-item-old">6.980р </div>
                         </div>
                         <div class="promo-text">
                             <span>Получить</span>
@@ -203,10 +224,10 @@
                 <div class="promo-notice">
                     <p>Спецпредложение</p>
                     <p>для новых пользователей сгорит:</p>
-                    <div class="promo-duration decoding-offer-time">00:00:00</div>
-                    <a href="#" id="startPremiumFromOfferExpired" class="promo-button decoding-offer-button">
+                    <div class="promo-duration">00:00:00</div>
+                    <a href="price.html" class="promo-button" id="buyRegularButton">
                         <div class="promo-price">
-                            <div class="price-item decoding-offer-button-current-price">6.980р</div>
+                            <div class="price-item">6.980р</div>
                         </div>
                         <div class="promo-text">
                             <span>Получить</span>
@@ -228,16 +249,6 @@
 <script src="js/utils/telegram-api.js"></script>
 <script src="js/utils/api-client.js"></script>
 <script src="js/utils/ui-helpers.js"></script>
-<script src="js/pages/price-offer-page.js"></script>
-<script>
-    // Инициализация страницы при загрузке
-    $(document).ready(function() {
-        if (window.PriceOfferPage) {
-            PriceOfferPage.init();
-        } else {
-            console.error('❌ PriceOfferPage не найден');
-        }
-    });
-</script>
+<script src="js/pages/quiz-start-page.js"></script>
 </body>
 </html>

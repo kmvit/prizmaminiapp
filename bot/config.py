@@ -33,7 +33,8 @@ ROBOKASSA_PASSWORD_2 = os.getenv("ROBOKASSA_PASSWORD_2")
 ROBOKASSA_TEST = os.getenv("ROBOKASSA_TEST", "1") == "1"
 
 # Настройки тестирования
-FREE_QUESTIONS_LIMIT = int(os.getenv("FREE_QUESTIONS_LIMIT", "10"))  # Количество бесплатных вопросов
+FREE_QUESTIONS_LIMIT = int(os.getenv("FREE_QUESTIONS_LIMIT", "8"))  # Количество бесплатных вопросов
+PREMIUM_QUESTIONS_COUNT = int(os.getenv("PREMIUM_QUESTIONS_COUNT", "38"))  # Количество платных вопросов
 
 # Администраторы бота (список ID через запятую)
 ADMIN_IDS = [int(id.strip()) for id in os.getenv("ADMIN_IDS", "").split(",") if id.strip()]
@@ -55,7 +56,8 @@ class Settings(BaseSettings):
     ROBOKASSA_PASSWORD_1: str
     ROBOKASSA_PASSWORD_2: str
     ROBOKASSA_TEST: int = 1 
-    FREE_QUESTIONS_LIMIT: int = 10  # Количество бесплатных вопросов
+    FREE_QUESTIONS_LIMIT: int = 8  # Количество бесплатных вопросов
+    PREMIUM_QUESTIONS_COUNT: int = 38  # Количество платных вопросов
     PREMIUM_PRICE_ORIGINAL: float = 6980.00  # Полная цена премиум отчета
     PREMIUM_PRICE_DISCOUNT: float = 3590.00  # Цена со скидкой (спецпредложение)
 
