@@ -40,8 +40,8 @@ PREMIUM_QUESTIONS_COUNT = int(os.getenv("PREMIUM_QUESTIONS_COUNT", "38"))  # К�
 ADMIN_IDS = [int(id.strip()) for id in os.getenv("ADMIN_IDS", "").split(",") if id.strip()]
 
 # Цены на премиум отчет
-PREMIUM_PRICE_ORIGINAL = float(os.getenv("PREMIUM_PRICE_ORIGINAL", "6980.00"))  # Полная цена премиум отчета
-PREMIUM_PRICE_DISCOUNT = float(os.getenv("PREMIUM_PRICE_DISCOUNT", "3590.00"))  # Цена со скидкой (спецпредложение)
+PREMIUM_PRICE_ORIGINAL = float(os.getenv("PREMIUM_PRICE_ORIGINAL", "1.00"))  # Полная цена премиум отчета (тестовая цена)
+PREMIUM_PRICE_DISCOUNT = float(os.getenv("PREMIUM_PRICE_DISCOUNT", "1.00"))  # Цена со скидкой (спецпредложение) (тестовая цена)
 
 class Settings(BaseSettings):
     # BOT_TOKEN: str  # Не нужен для веб-приложения
@@ -58,8 +58,8 @@ class Settings(BaseSettings):
     ROBOKASSA_TEST: int = 1 
     FREE_QUESTIONS_LIMIT: int = 8  # Количество бесплатных вопросов
     PREMIUM_QUESTIONS_COUNT: int = 38  # Количество платных вопросов
-    PREMIUM_PRICE_ORIGINAL: float = 6980.00  # Полная цена премиум отчета
-    PREMIUM_PRICE_DISCOUNT: float = 3590.00  # Цена со скидкой (спецпредложение)
+    PREMIUM_PRICE_ORIGINAL: float = 1.00  # Полная цена премиум отчета (тестовая цена)
+    PREMIUM_PRICE_DISCOUNT: float = 1.00  # Цена со скидкой (спецпредложение) (тестовая цена)
 
     class Config:
         env_file = ".env"

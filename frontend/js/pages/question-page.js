@@ -261,7 +261,7 @@ window.QuestionPage = {
         // Обработчик отправки ответа
         $('#nextButton').on('click', () => {
             const answerText = $('#questionArea').val().trim();
-            if (answerText.length >= 500) {
+            if (answerText.length >= 350) {
                 this.submitAnswer();
             }
         });
@@ -284,7 +284,7 @@ window.QuestionPage = {
         $('#questionArea').on('keydown', (e) => {
             if (e.ctrlKey && e.keyCode === 13) {
                 const answerText = $('#questionArea').val().trim();
-                if (answerText.length >= 500) {
+                if (answerText.length >= 350) {
                     this.submitAnswer();
                 }
             }

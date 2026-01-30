@@ -844,7 +844,7 @@ $(function() {
             
             // Устанавливаем начальное состояние кнопки
             $('#nextButton').prop('disabled', true).addClass('disabled');
-            $('#nextButton span').text('Еще 500 символов');
+            $('#nextButton span').text('Еще 350 символов');
             
             console.log('Question loaded:', question);
         }
@@ -1014,7 +1014,7 @@ $(function() {
         // Функция для проверки длины текста и управления состоянием кнопки
         function updateButtonState() {
             const answerText = $('#questionArea').val().trim();
-            const minLength = 500;
+            const minLength = 350;
             const currentLength = answerText.length;
             
             if (currentLength >= minLength) {
@@ -1030,7 +1030,7 @@ $(function() {
         // Используем только HTML кнопку с SVG треугольником
         $('#nextButton').show().off('click').on('click', function() {
             const answerText = $('#questionArea').val().trim();
-            if (answerText.length >= 500) {
+            if (answerText.length >= 350) {
                 submitAnswer();
             }
         });
@@ -1040,7 +1040,7 @@ $(function() {
         $('#questionArea').on('keydown', function(e) {
             if (e.ctrlKey && e.keyCode === 13) {
                 const answerText = $('#questionArea').val().trim();
-                if (answerText.length >= 500) {
+                if (answerText.length >= 350) {
                     submitAnswer();
                 }
             }
