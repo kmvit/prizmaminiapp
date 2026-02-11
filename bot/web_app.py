@@ -10,7 +10,7 @@ import decimal
 import time
 
 from bot.services.database_service import db_service
-from bot.config import BASE_DIR, PERPLEXITY_ENABLED, settings, PREMIUM_PRICE_ORIGINAL, PREMIUM_PRICE_DISCOUNT
+from bot.config import BASE_DIR, FREE_QUESTIONS_LIMIT, PERPLEXITY_ENABLED, settings, PREMIUM_PRICE_ORIGINAL, PREMIUM_PRICE_DISCOUNT
 from bot.models.api_models import (
     AnswerRequest, UserProfileUpdate, CurrentQuestionResponse, 
     NextQuestionResponse, UserProgressResponse, UserProfileResponse,
@@ -128,6 +128,13 @@ async def get_current_question(telegram_id: int):
         test_version = "premium" if user.is_paid else "free"
         total_questions = await db_service.get_total_questions(test_version)
         
+        # Для премиум-теста показываем относительный номер (1 из 38), не глобальный (9 из 38)
+        display_current = (
+            question.order_number - FREE_QUESTIONS_LIMIT
+            if test_version == "premium"
+            else question.order_number
+        )
+        
         # Получаем количество уже отвеченных вопросов
         answers = await db_service.get_user_answers(telegram_id)
         answered_count = len(answers)
@@ -142,7 +149,7 @@ async def get_current_question(telegram_id: int):
                 max_length=question.max_length
             ),
             progress=ProgressResponse(
-                current=question.order_number,
+                current=display_current,
                 total=total_questions,
                 answered=answered_count
             ),
@@ -213,6 +220,13 @@ async def save_answer(telegram_id: int, answer_data: AnswerRequest):
             answers = await db_service.get_user_answers(telegram_id)
             answered_count = len(answers)
             
+            # Для премиум-теста показываем относительный номер (1 из 38), не глобальный (9 из 38)
+            display_current = (
+                next_question.order_number - FREE_QUESTIONS_LIMIT
+                if test_version == "premium"
+                else next_question.order_number
+            )
+            
             return NextQuestionResponse(
                 status="next_question",
                 next_question=QuestionResponse(
@@ -224,7 +238,7 @@ async def save_answer(telegram_id: int, answer_data: AnswerRequest):
                     max_length=next_question.max_length
                 ),
                 progress=ProgressResponse(
-                    current=next_question.order_number,
+                    current=display_current,
                     total=total_questions,
                     answered=answered_count
                 )
@@ -1803,20 +1817,12 @@ async def get_special_offer_timer(telegram_id: int):
         # Получаем пользователя
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
-        # Проверяем, есть ли активный таймер
+        # При первом обращении — запускаем таймер автоматически (24ч с этого момента)
         if not user.special_offer_started_at:
-            logger.info(f"⏰ Таймер спецпредложения для пользователя {telegram_id} не найден")
-            return {
-                "status": "no_timer",
-                "message": "Таймер спецпредложения не запущен",
-                "timer": None,
-                "pricing": {
-                    "current_price": int(PREMIUM_PRICE_ORIGINAL),
-                    "original_price": int(PREMIUM_PRICE_ORIGINAL),
-                    "is_offer_active": False
-                }
-            }
-        
+            logger.info(f"⏰ Первый визит: запуск таймера спецпредложения для пользователя {telegram_id}")
+            user.special_offer_started_at = datetime.utcnow()
+            await db_service.update_user(telegram_id, {"special_offer_started_at": user.special_offer_started_at})
+
         # Вычисляем оставшееся время (24 часа = 86400 секунд)
         offer_duration = 86400  # 24 часа в секундах
         elapsed_time = (datetime.utcnow() - user.special_offer_started_at).total_seconds()

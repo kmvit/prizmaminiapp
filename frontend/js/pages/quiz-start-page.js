@@ -16,17 +16,14 @@ const QuizStartPage = {
             return; // Перенаправление уже выполнено
         }
         
-        // Инициализируем кастомный селект для пола
-        this.initCustomSelect();
-        
         // Настраиваем обработчики событий
         this.setupEventHandlers();
         
-        // Загружаем данные пользователя если есть
-        await this.loadUserProfile();
-        
-        // Инициализируем таймер спецпредложения
-        await this.initTimer();
+        if (!this.isIndex2Page()) {
+            this.initCustomSelect();
+            await this.loadUserProfile();
+            await this.initTimer();
+        }
     },
 
     /**
@@ -65,10 +62,14 @@ const QuizStartPage = {
      * Настройка обработчиков событий
      */
     setupEventHandlers() {
-        // Кнопка начала теста
+        // Кнопка начала теста (на index — форма; на index2 — роут по статусу)
         $('#startTestButton').on('click', (e) => {
             e.preventDefault();
-            this.startTest();
+            if (this.isIndex2Page()) {
+                this.handleIndex2Continue();
+            } else {
+                this.startTest();
+            }
         });
         
         // Валидация полей при вводе
@@ -140,6 +141,52 @@ const QuizStartPage = {
     },
 
     /**
+     * Обработка «Продолжить или начать тест» на index2 — переход на нужную страницу
+     */
+    async handleIndex2Continue() {
+        try {
+            const telegramId = this.getTelegramUserId();
+            if (!telegramId) {
+                window.location.href = 'login.html';
+                return;
+            }
+            const reportsStatus = await ApiClient.getReportsStatus(telegramId);
+            const freeStatus = reportsStatus.free_report_status;
+            const premiumStatus = reportsStatus.premium_report_status;
+
+            if ((premiumStatus?.status === 'processing') || (freeStatus?.status === 'processing') ||
+                (reportsStatus.available_report?.status === 'processing')) {
+                window.location.href = 'loading.html';
+                return;
+            }
+            if (reportsStatus.available_report?.status === 'ready') {
+                if (reportsStatus.available_report.type === 'premium') {
+                    window.location.href = 'download.html';
+                } else {
+                    window.location.href = 'price-offer.html';
+                }
+                return;
+            }
+            if (reportsStatus.status === 'success') {
+                window.location.href = 'loading.html';
+                return;
+            }
+            // Нет отчёта — идём к вопросам (продолжить тест или начать премиум)
+            const progress = await ApiClient.getUserProgress(telegramId);
+            const answered = progress?.progress?.answered ?? 0;
+            const total = progress?.progress?.total ?? 0;
+            if (answered > 0 && answered < total) {
+                window.location.href = 'question.html';
+            } else {
+                window.location.href = 'question.html'; // начать тест
+            }
+        } catch (error) {
+            console.error('❌ Ошибка handleIndex2Continue:', error);
+            window.location.href = 'question.html';
+        }
+    },
+
+    /**
      * Начать тест
      */
     async startTest() {
@@ -198,17 +245,14 @@ const QuizStartPage = {
             const timerData = await ApiClient.getSpecialOfferTimer(telegramId);
             
             if (timerData.status === 'success' && timerData.timer) {
-                // Обновляем таймер и цену
                 this.updateTimerDisplay(timerData.timer, timerData.pricing);
                 this.startCountdown(timerData.timer.remaining_seconds);
             } else {
                 console.error('❌ Ошибка получения таймера:', timerData);
-                // Показываем статичное время в случае ошибки
                 this.updateTimerDisplay({ time_string: '23:59:59', is_expired: false });
             }
         } catch (error) {
             console.error('❌ Ошибка запуска таймера:', error);
-            // Показываем статичное время в случае ошибки
             this.updateTimerDisplay({ time_string: '23:59:59', is_expired: false });
         }
     },
@@ -422,6 +466,13 @@ const QuizStartPage = {
     },
 
     /**
+     * На index2 не делаем редирект — мы уже на нужной странице
+     */
+    isIndex2Page() {
+        return window.location.pathname.includes('index2') || window.location.href.includes('index2');
+    },
+
+    /**
      * Проверка статуса пользователя
      * Возвращает true, если было выполнено перенаправление
      */
@@ -430,6 +481,12 @@ const QuizStartPage = {
             const telegramId = this.getTelegramUserId();
             if (!telegramId) {
                 console.log('ℹ️ Telegram ID не найден, пропускаем проверку статуса');
+                return false;
+            }
+
+            // На index2 — не редиректим (возвращающийся пользователь уже на нужной странице)
+            if (this.isIndex2Page()) {
+                console.log('📄 Страница index2 — пропускаем редирект');
                 return false;
             }
 
@@ -448,8 +505,8 @@ const QuizStartPage = {
                 const total = progress?.progress?.total ?? 0;
 
                 if (total > 0 && answered >= total) {
-                    console.log('✅ Все вопросы завершены, перенаправляем на loading');
-                    window.location.href = 'loading.html';
+                    console.log('✅ Все вопросы завершены — перенаправляем на index2 (возвращающийся пользователь)');
+                    window.location.href = 'index2.html';
                     return true;
                 }
                 if (answered > 0) {
@@ -462,34 +519,27 @@ const QuizStartPage = {
                 return false;
             }
             
-            // Проверяем, генерируется ли отчет (free или premium)
+            // Пользователь с пройденными тестами — при повторном входе показываем index2
             const freeStatus = reportsStatus.free_report_status;
             const premiumStatus = reportsStatus.premium_report_status;
             if ((premiumStatus && premiumStatus.status === 'processing') || 
                 (freeStatus && freeStatus.status === 'processing') || 
                 (reportsStatus.available_report && reportsStatus.available_report.status === 'processing')) {
-                console.log('⏳ Отчет генерируется — перенаправляем на loading');
-                window.location.href = 'loading.html';
+                console.log('⏳ Отчет генерируется — перенаправляем на index2');
+                window.location.href = 'index2.html';
                 return true;
             }
             
-            // Проверяем, есть ли готовый отчет
             if (reportsStatus.available_report && reportsStatus.available_report.status === 'ready') {
-                if (reportsStatus.available_report.type === 'premium') {
-                    console.log('✅ Премиум отчет готов, перенаправляем на download');
-                    window.location.href = 'download.html';
-                } else {
-                    console.log('🆓 Бесплатный отчет готов, перенаправляем на price-offer');
-                    window.location.href = 'price-offer.html';
-                }
+                console.log('✅ Отчет готов (free или premium) — перенаправляем на index2');
+                window.location.href = 'index2.html';
                 return true;
             }
             
-            // Если тест завершен (общий успех) и нет готового отчета — переходим на loading
             if (reportsStatus.status === 'success' && 
                 (!reportsStatus.available_report || reportsStatus.available_report.status !== 'ready')) {
-                console.log('✅ Тест завершен, перенаправляем на loading для запуска/ожидания генерации');
-                window.location.href = 'loading.html';
+                console.log('✅ Тест завершен — перенаправляем на index2');
+                window.location.href = 'index2.html';
                 return true;
             }
             
