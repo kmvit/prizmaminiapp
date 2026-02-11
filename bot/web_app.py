@@ -770,9 +770,9 @@ async def generate_report_background(telegram_id: int):
         # Статус PROCESSING уже установлен в start_report_generation, поэтому просто продолжаем генерацию
         logger.info(f"📝 Статус PROCESSING уже установлен для пользователя {telegram_id}, продолжаем генерацию")
         
-        # Получаем ответы и вопросы
-        answers = await db_service.get_user_answers(telegram_id)
-        questions = await db_service.get_questions()
+        # Получаем только бесплатные вопросы и ответы на них
+        questions = await db_service.get_questions_by_version("free")
+        answers = await db_service.get_user_answers_by_test_version(telegram_id, "free")
         
         # Генерируем отчет через AI сервис
         from bot.services.perplexity import AIAnalysisService
@@ -1464,16 +1464,16 @@ async def download_premium_personal_report(telegram_id: int, download: Optional[
 
 # Функция фоновой генерации платного отчета (синхронная версия для обратной совместимости)
 async def generate_premium_report_background(telegram_id: int):
-    """Генерация платного отчета в фоновом режиме после завершения теста (50 вопросов)"""
+    """Генерация платного отчета в фоновом режиме после завершения теста (только premium вопросы)"""
     try:
         logger.info(f"🔄 Начинаем фоновую генерацию ПЛАТНОГО отчета для пользователя {telegram_id}")
         
         # Получаем пользователя
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
-        # Получаем ответы и вопросы
-        answers = await db_service.get_user_answers(telegram_id)
-        questions = await db_service.get_questions()
+        # Получаем только платные вопросы и ответы на них
+        questions = await db_service.get_questions_by_version("premium")
+        answers = await db_service.get_user_answers_by_test_version(telegram_id, "premium")
         
         # Генерируем платный отчет через AI сервис
         from bot.services.perplexity import AIAnalysisService
@@ -1495,16 +1495,16 @@ async def generate_premium_report_background(telegram_id: int):
 
 # Асинхронная функция генерации отчета для Background Tasks
 async def generate_premium_report_async(telegram_id: int):
-    """Асинхронная генерация премиум отчета в фоновом режиме"""
+    """Асинхронная генерация премиум отчета в фоновом режиме (только premium вопросы)"""
     try:
         logger.info(f"🔄 Начинаем асинхронную генерацию ПЛАТНОГО отчета для пользователя {telegram_id}")
         
         # Получаем пользователя
         user = await db_service.get_or_create_user(telegram_id=telegram_id)
         
-        # Получаем ответы и вопросы
-        answers = await db_service.get_user_answers(telegram_id)
-        questions = await db_service.get_questions()
+        # Получаем только платные вопросы и ответы на них
+        questions = await db_service.get_questions_by_version("premium")
+        answers = await db_service.get_user_answers_by_test_version(telegram_id, "premium")
         
         # Генерируем платный отчет через AI сервис
         from bot.services.perplexity import AIAnalysisService

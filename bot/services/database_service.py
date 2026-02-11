@@ -364,6 +364,16 @@ class DatabaseService:
             stmt = select(Question).where(Question.is_active == True).order_by(Question.order_number)
             result = await session.execute(stmt)
             return result.scalars().all()
+
+    async def get_questions_by_version(self, test_version: str) -> List[Question]:
+        """Получить вопросы только указанной версии теста (free или premium)"""
+        async with async_session() as session:
+            stmt = select(Question).where(
+                Question.is_active == True,
+                Question.test_version == test_version
+            ).order_by(Question.order_number)
+            result = await session.execute(stmt)
+            return result.scalars().all()
     
     async def create_question(self, text: str, question_type: QuestionType, order_number: int) -> Question:
         """Создать новый вопрос"""
@@ -464,6 +474,27 @@ class DatabaseService:
                 selectinload(Answer.question)
             ).where(Answer.user_id == user.id).order_by(Answer.created_at)
             
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
+    async def get_user_answers_by_test_version(self, telegram_id: int, test_version: str) -> List[Answer]:
+        """Получить ответы пользователя только по вопросам указанной версии теста (free или premium)"""
+        async with async_session() as session:
+            user_stmt = select(User).where(User.telegram_id == telegram_id)
+            user_result = await session.execute(user_stmt)
+            user = user_result.scalar_one()
+            
+            stmt = (
+                select(Answer)
+                .options(selectinload(Answer.question))
+                .join(Question, Answer.question_id == Question.id)
+                .where(
+                    Answer.user_id == user.id,
+                    Question.test_version == test_version,
+                    Question.is_active == True
+                )
+                .order_by(Question.order_number)
+            )
             result = await session.execute(stmt)
             return result.scalars().all()
     
