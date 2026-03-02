@@ -2210,6 +2210,12 @@ body {
     margin-bottom: 20px;
 }
 
+/* Скрыть кнопку "Отправить отчет в Telegram" (удалена из UI) */
+.telegram-button-above-title,
+.link-telegram-bot {
+    display: none !important;
+}
+
 .quiz-completed-full .quiz-full-title {
     font-family: var(--second-family), sans-serif;
     font-weight: 400;
